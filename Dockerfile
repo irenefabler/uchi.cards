@@ -11,8 +11,9 @@ ARG no_proxy
 
 WORKDIR /app
 
-# Включаем pnpm через corepack (версия берётся из поля packageManager в package.json)
-RUN corepack enable
+# Ставим pnpm глобально через npm. Corepack не используем: в CI нет прямого доступа
+# к registry.npmjs.org, а corepack не умеет ходить через https_proxy. npm — умеет.
+RUN npm install -g pnpm@11.15.1
 
 ENV NPM_REGISTRY //verdaccio-uchi.runit.cc/
 
