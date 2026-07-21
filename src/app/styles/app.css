@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/* Например можно задавать глобальные custom properties */
+:root {
+  --some-custom-prop: 10;
+}
+
+/* Дизайн-токены Tailwind v4 (CSS-first конфигурация).
+   Расширяют/переопределяют дефолтную тему Tailwind. */
+@theme {
+  --color-primary: oklch(0.55 0.2 250);
+  --font-sans: 'Inter', system-ui, sans-serif;
+}

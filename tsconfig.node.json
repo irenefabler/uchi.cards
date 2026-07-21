@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["src/*"]
+    }
+  },
+  "extends": "@uchi/content-0-4-typescript-config/node",
+  "include": ["vite.config.ts"]
+}

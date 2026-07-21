@@ -1,0 +1,10 @@
+{
+  "extends": "@uchi/content-0-4-typescript-config/eslint",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["src/*"]
+    }
+  },
+  "include": ["src", "eslint.config.js", "vite.config.ts", "scripts/init-template.js"]
+}

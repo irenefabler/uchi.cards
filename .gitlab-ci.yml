@@ -1,0 +1,20 @@
+stages:
+  - build
+  - checks
+
+variables:
+  BUILD_SECRETS: |
+    npm_token=$NPM_TOKEN
+
+  # [TODO] добавить свой base path (без кавычек) для продукта
+  BUILD_ARGS: |
+    BASE_IMAGE=$BASE_IMAGE_UBUNTU24_SPA
+    BASE_PATH=[TODO]
+
+include:
+  - project: uchiru/ci/shared
+    ref: master
+    file: stages/build-and-push.yml
+    # аудит зависимостей, stage = checks
+  - project: uchiru/product/content-1-4/core/content-0-4-configs
+    file: ci/gitlab/audit/audit.yml
