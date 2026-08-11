@@ -130,8 +130,8 @@ VITE_PROXY_URL=[TODO]
 CI/CD на основе шаблона:
 
 - `.gitlab-ci.yml` подключает шаблон `uchiru/ci/shared`
-- Сборка в Dockerfile идёт через **pnpm** (активируется corepack по полю `packageManager` в `package.json`); lock-файл `pnpm-lock.yaml` должен быть закоммичен
-- Убедитесь, что переменные окружения настроены: `BASE_PATH`, `NPM_TOKEN`
+- Сборка в Dockerfile идёт через **pnpm** (ставится `npm install -g pnpm`); lock-файл `pnpm-lock.yaml` должен быть закоммичен
+- Внутренние конфиг-пакеты `@uchi/content-0-4-*` вендорены в `vendor/` (pnpm-workspace), поэтому `NPM_TOKEN` для сборки не нужен. Убедитесь, что настроена переменная `BASE_PATH`
 
 ## 🧠 Дополнительно
 

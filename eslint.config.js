@@ -29,7 +29,7 @@ const configured = baseConfig.map((entry) => ({
 }));
 
 export default [
-  // артефакты сборки и зависимости не линтим
-  { ignores: ['dist/**', 'node_modules/**'] },
+  // артефакты сборки, зависимости и вендорные конфиг-пакеты не линтим
+  { ignores: ['dist/**', 'node_modules/**', 'vendor/**'] },
   ...configured
 ];

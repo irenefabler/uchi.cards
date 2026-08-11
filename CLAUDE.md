@@ -8,13 +8,13 @@ This is a **frontend FSD template** (`frontend-fsd-template`) — a starter for 
 
 Stack: **React 19, Zustand, @tanstack/react-query, Tailwind CSS v4, TypeScript, Vite, React Router v7, CSS Modules**. Node 24.18 (see `.nvmrc`). Package manager is **pnpm**; dependencies are pinned to exact versions via `save-exact=true` in `.npmrc` — install with `pnpm add <pkg>` (no extra flag needed).
 
-Build/lint/dev config is **not defined inline** — it comes from the shared `@uchi/content-0-4-*` config packages:
+Build/lint/dev config is **not defined inline** — it comes from the `@uchi/content-0-4-*` config packages, which are **vendored into the repo under `vendor/`** as pnpm-workspace packages (see `pnpm-workspace.yaml` → `packages: ['vendor/*']`). The root `package.json` references them via `workspace:*`. They are consumed exactly as if installed from a registry:
 - `vite.config.ts` extends `@uchi/content-0-4-vite-config`
 - `tsconfig.json` extends `@uchi/content-0-4-typescript-config/base`
 - `eslint.config.js` extends `@uchi/content-0-4-eslint-config`
 - `prettier` uses `@uchi/content-0-4-prettier-config`
 
-When changing build/alias/proxy behavior, check the upstream config package before assuming something is configurable here. The default path alias is `src` → `src/*` (configured across `tsconfig*.json` and the upstream vite config).
+Vendoring means **no Verdaccio auth / `NPM_TOKEN` is required to install** these packages — they resolve via workspace symlinks. Their own `dependencies`/`peerDependencies` are all public npm packages. When changing build/alias/proxy behavior, edit the relevant file under `vendor/content-0-4-*/` (these are faithful copies of the upstream `content-0-4-configs` packages). The default path alias is `src` → `src/*` (configured across `tsconfig*.json` and the vendored vite config).
 
 ## Commands
 
@@ -73,7 +73,7 @@ App-global providers live in `shared/context` — `QueryProvider` wraps the app 
 
 `shared/model/environment` exposes a static `Environment` class that reads `import.meta.env` and **throws at runtime** if a required var is missing. Access env via `Environment.basePath` etc. — do not read `import.meta.env` directly in feature/page code. Env vars are Vite-prefixed (`VITE_*`) and templated with Shaman placeholders in `.env.production` (e.g. `<%SHAMAN_ENVIRONMENT-stage%>`).
 
-`shared/api` is the API boundary. Currently `Api` returns mocks (`shared/api/mocks`) and is consumed by the `useUserQuery` TanStack Query hook; real HTTP + Vite dev proxy config (`VITE_PROXY_PATH_*` → `server.proxy`) is set up via the upstream vite config — add `VITE_PROXY_PATH_<NAME>=<path>` vars in `.env.development` to register a proxy route.
+`shared/api` is the API boundary. Currently `Api` returns mocks (`shared/api/mocks`) and is consumed by the `useUserQuery` TanStack Query hook; real HTTP + Vite dev proxy config (`VITE_PROXY_PATH_*` → `server.proxy`) is set up via the vendored vite config — add `VITE_PROXY_PATH_<NAME>=<path>` vars in `.env.development` to register a proxy route.
 
 ## Template scaffolding (`pnpm init-template`)
 
@@ -81,4 +81,4 @@ App-global providers live in `shared/context` — `QueryProvider` wraps the app 
 
 ## CI / deploy
 
-`.gitlab-ci.yml` includes `uchiru/ci/shared` (build-and-push) and a custom `audit` job (stage `checks`) that runs `pnpm audit --prod --audit-level=high` — the upstream `content-0-4-configs` audit template is yarn@1-based and is not used. `BASE_PATH` is a required CI variable (currently `[TODO]`). The Dockerfile is a two-stage build (`node:24.18.0-alpine` → `${BASE_IMAGE}`) that authenticates to an internal Verdaccio registry via a build secret (`npm_token`), installs pnpm globally via `npm install -g` (corepack is not used — it can't reach `registry.npmjs.org` from CI nor use the `https_proxy` that npm honors), and runs `pnpm build`. Public packages come from `registry.npmjs.org` through the build's `https_proxy`; `@uchi/*`/`@front`/`@uchi-schema` come from Verdaccio. The `pnpm-lock.yaml` must be committed for `--frozen-lockfile`. Shaman (`.shaman/*.yml`) describes the deployed app service and its routing/auth rules for the uchi.ru platform.
+`.gitlab-ci.yml` includes `uchiru/ci/shared` (build-and-push) and a custom `audit` job (stage `checks`) that runs `pnpm audit --prod --audit-level=high` — the upstream `content-0-4-configs` audit template is yarn@1-based and is not used. `BASE_PATH` is a required CI variable (currently `[TODO]`). The Dockerfile is a two-stage build (`node:24.18.0-alpine` → `${BASE_IMAGE}`) that installs pnpm globally via `npm install -g` (corepack is not used — it can't reach `registry.npmjs.org` from CI nor use the `https_proxy` that npm honors) and runs `pnpm build`. The `@uchi/content-0-4-*` config packages are vendored under `vendor/` (pnpm-workspace), so the Dockerfile copies `vendor/` and `pnpm-workspace.yaml` in before `pnpm install --frozen-lockfile --ignore-scripts` and **no longer authenticates to Verdaccio** (no `NPM_TOKEN`/`npm_token` build secret). All dependencies now come from `registry.npmjs.org` through the build's `https_proxy`. The `pnpm-lock.yaml` must be committed for `--frozen-lockfile`. Shaman (`.shaman/*.yml`) describes the deployed app service and its routing/auth rules for the uchi.ru platform.

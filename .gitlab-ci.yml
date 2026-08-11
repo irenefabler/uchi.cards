@@ -3,8 +3,10 @@ stages:
   - checks
 
 variables:
-  BUILD_SECRETS: |
-    npm_token=$NPM_TOKEN
+  # Внутренние @uchi-конфиги вендорены в vendor/ (pnpm-workspace), поэтому
+  # NPM_TOKEN для сборки больше не нужен. Если появятся другие build-secrets —
+  # перечисляйте их здесь в формате <name>=<ci-var>.
+  BUILD_SECRETS: ""
 
   # [TODO] добавить свой base path (без кавычек) для продукта
   BUILD_ARGS: |

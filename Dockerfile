@@ -15,17 +15,13 @@ WORKDIR /app
 # к registry.npmjs.org, а corepack не умеет ходить через https_proxy. npm — умеет.
 RUN npm install -g pnpm@11.15.1
 
-ENV NPM_REGISTRY //verdaccio-uchi.runit.cc/
-
-RUN echo "@front:registry=https:$NPM_REGISTRY" >> ~/.npmrc
-RUN echo "@uchi-schema:registry=https:$NPM_REGISTRY" >> ~/.npmrc
-RUN echo "@uchi:registry=https:$NPM_REGISTRY" >> ~/.npmrc
-RUN --mount=type=secret,id=npm_token \
-  echo "$NPM_REGISTRY:_authToken=$(cat /kaniko/npm_token)" >> .npmrc
-
-COPY package.json pnpm-lock.yaml /app/
+# Внутренние конфиг-пакеты @uchi/content-0-4-* вендорены в vendor/ (pnpm-workspace),
+# поэтому для установки зависимостей больше не нужна авторизация во внутреннем Verdaccio.
+# Публичные пакеты приходят из registry.npmjs.org через https_proxy.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY vendor/ /app/vendor/
 RUN pnpm install --frozen-lockfile --ignore-scripts
-RUN rm -f .npmrc
+
 COPY . /app
 
 RUN NODE_ENV=production pnpm build
