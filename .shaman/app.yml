@@ -27,6 +27,13 @@ spec:
       value: "${{ values.SPA_BASE_S3_KEY }}"
     - key: S3_BUCKET
       value: "${{ values.SPA_BASE_S3_BUCKET }}"
+    - key: "SPA_ASSETS_CDN_HOST"
+      value: "${{ values.SPA_ASSETS_CDN_HOST }}"
+
+  pre:
+    - mem: "${{ values.pre.upload.mem_mb }}"
+      command: "/entrypoint.sh upload"
+
   services:
     - name: "main"
       mem: "${{ values.services.main.mem_mb }}"
