@@ -2,10 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { dragPose, MOTION, swipeVerdict } from '../model/motion';
 import type { MotionPhase } from '../model/motion';
-import arcTop from './assets/6-6351-img.svg';
-import arcBottom from './assets/6-6351-img1.svg';
-import artwork from './assets/6-6351-img2.svg';
-import flipIcon from './assets/6-6351-imgRotate3D.svg';
 import styles from './flashcards.module.css';
 
 type Props = {
@@ -260,14 +256,8 @@ export function GestureCard({ cardId, token, number, question, answer, disabled,
         className={`${styles.studyCard} ${styles.cardFace} ${back ? styles.backFace : ''}`}
         aria-hidden={back !== flipped}
       >
-        <img className={styles.arcTop} src={arcTop} draggable={false} alt="" />
-        <img className={styles.arcBottom} src={arcBottom} draggable={false} alt="" />
-        <div className={styles.studyLeaf}>
-          <img src={artwork} draggable={false} alt="" />
-        </div>
         <h2>{text}</h2>
         <small>Нажми, чтобы перевернуть</small>
-        <img src={flipIcon} draggable={false} alt="" />
       </div>
     );
   }

@@ -12,6 +12,8 @@ export type Card = CardSemantics & {
   knowledgeStatus: 'known' | 'unknown' | null;
 };
 export type Deck = {
+  coverIconId?: string;
+  coverSelection?: 'auto' | 'manual';
   id: number;
   title: string;
   sourceType: 'manual' | 'text' | 'photo';
@@ -23,7 +25,10 @@ export type Deck = {
   reviewedCount: number;
   activeSessionId?: number | null;
 };
-export type DeckInput = Pick<Deck, 'title' | 'sourceType' | 'revision' | 'isDraft'> & {
+export type DeckInput = Pick<
+  Deck,
+  'title' | 'sourceType' | 'revision' | 'isDraft' | 'coverIconId' | 'coverSelection'
+> & {
   cards: (Pick<Card, 'id' | 'question' | 'answer'> & CardSemantics)[];
 };
 export type StudySession = {

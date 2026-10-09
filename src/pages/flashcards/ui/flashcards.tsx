@@ -5,13 +5,10 @@ import { useNavigate, useParams, useLocation, Link } from 'react-router';
 import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
 import { validCards } from '../model/study';
-import leafAsset from './assets/6-6045-img.svg';
 import chevronAsset from './assets/6-6045-imgChevronRight.svg';
 import plusAsset from './assets/6-6045-imgPlus.svg';
-import sunAsset from './assets/6-6045-imgSun.svg';
 import cameraAsset from './assets/6-6124-imgCamera.svg';
 import backAsset from './assets/6-6124-imgChevronLeft.svg';
-import photoAsset from './assets/6-6124-imgGroup2147224083.svg';
 import pencilAsset from './assets/6-6124-imgPencilLine.svg';
 import hintAsset from './assets/6-6124-imgSparkles.svg';
 import sourceCheckAsset from './assets/6-6168-imgCheckCircle2.svg';
@@ -20,26 +17,20 @@ import aiAsset from './assets/6-6168-imgSparkles.svg';
 import generateAsset from './assets/6-6168-imgSparkles1.svg';
 import saveAsset from './assets/6-6218-imgCheck.svg';
 import trashAsset from './assets/6-6218-imgTrash2.svg';
-import deckLeafAsset from './assets/6-6284-img.svg';
-import previewLeafAsset from './assets/6-6284-img1.svg';
 import brainAsset from './assets/6-6284-imgBrain.svg';
 import playAsset from './assets/6-6284-imgPlay.svg';
-import previewSunAsset from './assets/6-6284-imgSun.svg';
 import closeAsset from './assets/6-6351-imgX.svg';
-import cupAsset from './assets/6-6395-img.svg';
 import checkAsset from './assets/6-6395-imgCheck.svg';
 import restartAsset from './assets/6-6395-imgRotateCcw.svg';
 import adviceAsset from './assets/6-6395-imgSparkles.svg';
+import { CoverIcon, Illustration, coverOptions } from './cover-icon';
 import styles from './flashcards.module.css';
 import { GestureCard } from './gesture-card';
 
 const artwork = {
-  leaf: leafAsset,
-  sun: sunAsset,
   chevron: chevronAsset,
   plus: plusAsset,
   back: backAsset,
-  photo: photoAsset,
   camera: cameraAsset,
   pencil: pencilAsset,
   hint: hintAsset,
@@ -49,13 +40,9 @@ const artwork = {
   generate: generateAsset,
   trash: trashAsset,
   save: saveAsset,
-  deckLeaf: deckLeafAsset,
   brain: brainAsset,
   play: playAsset,
-  previewSun: previewSunAsset,
-  previewLeaf: previewLeafAsset,
   close: closeAsset,
-  cup: cupAsset,
   check: checkAsset,
   advice: adviceAsset,
   restart: restartAsset
@@ -169,23 +156,6 @@ function Progress({
     </div>
   );
 }
-function Sprout({
-  kind = 'leaf'
-}: {
-  kind?: 'leaf' | 'sun' | 'book' | 'photo' | 'cup' | 'deckLeaf' | 'previewLeaf' | 'previewSun';
-}) {
-  return (
-    <div className={`${styles.art} ${styles[kind] ?? ''}`} aria-hidden="true">
-      {kind === 'book' ? (
-        <div className={styles.wordCards}>
-          <span>go</span>
-        </div>
-      ) : (
-        <Icon name={kind} />
-      )}
-    </div>
-  );
-}
 function Failure({ error, retry }: { error: unknown; retry: () => void }) {
   return (
     <>
@@ -213,7 +183,7 @@ export function LibraryPage() {
       {query.isError && <Failure error={query.error} retry={() => void query.refetch()} />}
       {query.data?.length === 0 && (
         <div className={styles.empty}>
-          <Sprout kind="book" />
+          <Illustration id="folder-cards" />
           <h2>Первый набор — начало!</h2>
           <p>Добавьте карточки и попробуйте тренировку.</p>
           <Link className={styles.primary} to="/new">
@@ -222,9 +192,9 @@ export function LibraryPage() {
         </div>
       )}
       <div className={styles.deckList}>
-        {query.data?.map((deck, index) => (
+        {query.data?.map((deck) => (
           <Link key={deck.id} className={styles.deckItem} to={`/decks/${deck.id}`}>
-            <Sprout kind={index % 3 === 1 ? 'book' : index % 3 === 2 ? 'sun' : 'leaf'} />
+            <CoverIcon id={deck.coverIconId} />
             <div>
               <div className={styles.deckTitle}>
                 <h2>{deck.title}</h2>
@@ -255,7 +225,7 @@ export function LibraryPage() {
         </nav>
       )}
       <Link to="/new" className={`${styles.primary} ${styles.createDeck}`} aria-label="Создать новый набор">
-        <Icon name="plus" /> Создать новый набор
+        <Icon name="plus" />
       </Link>
     </Shell>
   );
@@ -346,7 +316,7 @@ export function SourcePage() {
       {mode === 'photo' && (
         <section className={`${styles.panel} ${styles.upload}`}>
           <div className={styles.uploadInner}>
-            {!preview && <Sprout kind="photo" />}
+            {!preview && <Illustration id="camera-photo" />}
             {preview && <img src={preview} alt="Выбранная страница учебника" />}
             <label className={styles.primary} htmlFor="source-photo">
               <Icon name="camera" />
@@ -424,6 +394,11 @@ export function SourcePage() {
           Повторить распознавание
         </button>
       )}
+      {mode === 'text' && (
+        <div className={styles.sourceIllustration}>
+          <Illustration id="document-aa" />
+        </div>
+      )}
       {(mode === 'text' || (mode === 'photo' && text.trim())) && (
         <label className={styles.panel}>
           {mode === 'photo' ? 'Распознанный текст' : 'Текст учебника'}
@@ -440,7 +415,7 @@ export function SourcePage() {
       )}
       {mode === 'manual' && (
         <section className={`${styles.panel} ${styles.empty}`}>
-          <Sprout kind="book" />
+          <Illustration id="pencil" />
           <h2>Ваши вопросы и ответы</h2>
           <p>Создайте набор самостоятельно. Можно начать с одной карточки.</p>
         </section>
@@ -564,6 +539,12 @@ export function SettingsPage() {
           </section>
         </>
       )}
+      {busy && (
+        <div className={styles.sourceIllustration} role="status">
+          <Illustration id="sparkles" />
+          <p>Готовим карточки по материалу…</p>
+        </div>
+      )}
       {error && <Notice error>{error}</Notice>}
       <button className={styles.primary} disabled={!title.trim() || busy} onClick={() => void create()}>
         <Icon name="generate" />
@@ -678,6 +659,27 @@ function Editor({ initial }: { initial: Deck }) {
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
         />
       </label>
+      <details className={styles.coverPicker}>
+        <summary>
+          <CoverIcon id={draft.coverIconId} />
+          <span>Обложка набора · изменить</span>
+        </summary>
+        <div className={styles.coverChoices} role="group" aria-label="Обложка набора">
+          {coverOptions.map((option) => (
+            <button
+              type="button"
+              key={option.id}
+              disabled={busy}
+              aria-label={option.label}
+              aria-pressed={(draft.coverIconId || 'flashcards-leaf') === option.id}
+              onClick={() => setDraft({ ...draft, coverIconId: option.id, coverSelection: 'manual' })}
+            >
+              <CoverIcon id={option.id} />
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </details>
       {draft.sourceType !== 'manual' && (
         <Notice>Карточки созданы по материалу. Проверьте обе стороны перед сохранением.</Notice>
       )}
@@ -811,7 +813,7 @@ export function DeckPage() {
   return (
     <Shell back="/" navigationTitle="Мой набор">
       <div className={styles.deckHeading}>
-        <Sprout kind="deckLeaf" />
+        <CoverIcon id={deck.coverIconId} large />
         <div>
           <h1>{deck.title}</h1>
           <p>
@@ -851,10 +853,9 @@ export function DeckPage() {
       {error && <Notice error>{error}</Notice>}
       <h2 className={styles.examplesTitle}>Примеры карточек</h2>
       <div className={styles.deckList}>
-        {deck.cards.slice(0, showAll ? 100 : 4).map((card, index) => (
+        {deck.cards.slice(0, showAll ? 100 : 4).map((card) => (
           <details key={card.id} className={`${styles.panel} ${styles.previewCard}`}>
             <summary>
-              <Sprout kind={index % 2 ? 'previewLeaf' : 'previewSun'} />
               <span>
                 {card.question}
                 <small>Нажми, чтобы увидеть ответ</small>
@@ -1111,7 +1112,9 @@ export function ResultsPage() {
             )}
           </p>
         </div>
-        <Sprout kind="cup" />
+        <Illustration
+          id={session.finishedAt ? (session.knowledgePercent === 100 ? 'award-badge' : 'trophy') : 'brain'}
+        />
       </div>
       <section className={`${styles.panel} ${styles.resultProgress}`}>
         <h2>Освоено в тренировке</h2>

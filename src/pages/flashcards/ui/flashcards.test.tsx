@@ -91,8 +91,8 @@ describe('study interaction', () => {
       fireEvent.keyDown(card, { key: 'Enter' });
       await waitFor(() => expect(card.getAttribute('aria-disabled')).toBe('false'));
     }
-    expect(card.querySelector('img')?.getAttribute('draggable')).toBe('false');
-    expect(fireEvent.dragStart(card.querySelector('img')!)).toBe(false);
+    expect(card.querySelector('img')).toBeNull();
+    expect(fireEvent.dragStart(card)).toBe(false);
     fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 200, clientY: 200 });
     fireEvent.pointerMove(card, { pointerId: 1, clientX: 200 + distance, clientY: 200 });
     fireEvent.pointerUp(card, { pointerId: 1, clientX: 200 + distance, clientY: 200 });
@@ -499,4 +499,39 @@ it('trains a language pair without inventing a question', async () => {
   expect(screen.getByRole('heading', { name: 'Bed' })).toBeTruthy();
   expect(screen.queryByText(/Как переводится/)).toBeNull();
   expect(flashcardsApi.grade).not.toHaveBeenCalled();
+});
+
+it('offers only thematic covers and saves a manual choice with the edited deck', async () => {
+  const deck = {
+    id: 1,
+    title: 'Фотосинтез',
+    sourceType: 'manual' as const,
+    revision: 1,
+    isDraft: false,
+    cards: session.cards,
+    knowledgePercent: null,
+    knownCount: 0,
+    reviewedCount: 0,
+    coverIconId: 'plant-leaves',
+    coverSelection: 'auto' as const
+  };
+  vi.mocked(flashcardsApi.get).mockResolvedValue(deck);
+  vi.mocked(flashcardsApi.save)
+    .mockClear()
+    .mockResolvedValue({ ...deck, coverIconId: 'rocket', coverSelection: 'manual' });
+  mount(<EditorPage />, '/decks/1/edit', '/decks/:id/edit');
+  await screen.findByText('Обложка набора · изменить');
+  expect(screen.getByRole('group', { name: 'Обложка набора', hidden: true }).querySelectorAll('button')).toHaveLength(
+    10
+  );
+  await userEvent.click(screen.getByText('Обложка набора · изменить'));
+  await userEvent.click(screen.getByRole('button', { name: 'Космос' }));
+  fireEvent.change(screen.getByLabelText(/Название набора/), { target: { value: 'Новое название' } });
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить набор' }));
+  await waitFor(() =>
+    expect(flashcardsApi.save).toHaveBeenCalledWith(
+      expect.objectContaining({ coverIconId: 'rocket', coverSelection: 'manual', title: 'Новое название' }),
+      1
+    )
+  );
 });

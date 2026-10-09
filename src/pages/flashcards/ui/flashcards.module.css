@@ -1177,3 +1177,98 @@
     visibility: hidden;
   }
 }
+
+/* Transparent PNGs retain their native proportions and never receive a tile background. */
+.coverIcon {
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.largeIllustration {
+  width: 144px;
+  height: 144px;
+}
+.sourceIllustration {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  margin: 16px 0;
+}
+.empty > .largeIllustration {
+  margin: 0 auto 24px;
+}
+.createDeck {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 60px;
+  min-height: 60px;
+  height: 60px;
+  border-radius: 50%;
+  padding: 16px;
+  z-index: 5;
+  box-shadow: 0 5px 18px #0d0b3055;
+}
+.deckList {
+  margin-bottom: 24px;
+}
+.coverPicker {
+  margin: 18px 0;
+}
+.coverPicker summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  min-height: 64px;
+}
+.coverPicker summary .coverIcon {
+  width: 64px;
+  height: 64px;
+}
+.coverChoices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.coverChoices button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-radius: 16px;
+  background: transparent;
+  border: 2px solid transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.coverChoices button[aria-pressed='true'] {
+  border-color: var(--lime);
+}
+.coverChoices .coverIcon {
+  width: 64px;
+  height: 64px;
+}
+.studyCard {
+  justify-content: center;
+  padding: 48px 26px;
+}
+.previewCard summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 350px) {
+  .coverIcon {
+    width: 64px;
+    height: 64px;
+  }
+  .largeIllustration {
+    width: 120px;
+    height: 120px;
+  }
+}
