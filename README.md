@@ -156,3 +156,18 @@ session's direction. Canonical deck content is not rewritten.
 Validation: build, lint and 72 tests passed, including preview, direction selection,
 matching-session resume, opposite-direction start and reversed results restart.
 Browser QA used an isolated local deck and verified reversal, flip and reload.
+
+### Take a photo while creating a deck
+
+The photo source includes "Take a photo" with an inline live camera preview and
+"Capture page" / "Cancel" controls. It requests video only, preferring the rear
+camera and 1920x1080; the actual full video frame becomes JPEG and enters the
+existing upload validation and OCR flow. Existing file upload remains available.
+Permission denial, missing camera and capture failures show recoverable messages.
+Streams stop after capture, cancellation, navigation and late permission resolution.
+Camera access requires browser permission and a secure context (HTTPS or localhost).
+
+Validation: build, lint and 77 tests passed. Tests cover camera constraints,
+permission denial, frame capture, stream cleanup and capture-to-OCR integration.
+Browser QA verified the controls and cancellation. A physical camera snapshot was
+not obtained in the automated in-app browser; capture is covered with a mocked stream.

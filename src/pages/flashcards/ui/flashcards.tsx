@@ -24,6 +24,7 @@ import closeAsset from './assets/6-6351-imgX.svg';
 import checkAsset from './assets/6-6395-imgCheck.svg';
 import restartAsset from './assets/6-6395-imgRotateCcw.svg';
 import adviceAsset from './assets/6-6395-imgSparkles.svg';
+import { CameraCapture } from './camera-capture';
 import { CardText } from './card-text';
 import { CoverIcon, Illustration, coverOptions } from './cover-icon';
 import styles from './flashcards.module.css';
@@ -294,6 +295,7 @@ export function SourcePage() {
   const [mode, setMode] = useState<Deck['sourceType']>(initial.sourceType);
   const [text, setText] = useState(initial.text);
   const [photo, setPhoto] = useState<File>();
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [preview, setPreview] = useState('');
   const [error, setError] = useState('');
   const nav = useNavigate();
@@ -322,6 +324,15 @@ export function SourcePage() {
     },
     []
   );
+  function selectPhoto(file: File) {
+    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setError('Выберите одно JPG или PNG до 10 МБ.');
+      return;
+    }
+    setCameraOpen(false);
+    setPhoto(file);
+    void recognize(file);
+  }
   async function recognize(file: File) {
     const request = ++recognitionRequest.current;
     setText('');
@@ -432,7 +443,7 @@ export function SourcePage() {
         ).map(([value, label]) => (
           <button
             key={value}
-            disabled={recognizing}
+            disabled={recognizing || cameraOpen}
             aria-pressed={mode === value}
             className={mode === value ? styles.selected : ''}
             onClick={() => {
@@ -452,9 +463,16 @@ export function SourcePage() {
       {mode === 'photo' && (
         <section className={`${styles.panel} ${styles.upload}`}>
           <div className={styles.uploadInner}>
-            {!preview && <Illustration id="camera-photo" />}
-            {preview && <img src={preview} alt="Выбранная страница учебника" />}
-            <label className={styles.primary} htmlFor="source-photo">
+            {!preview && !cameraOpen && <Illustration id="camera-photo" />}
+            {preview && !cameraOpen && <img src={preview} alt="Выбранная страница учебника" />}
+            {cameraOpen ? (
+              <CameraCapture onPhoto={selectPhoto} onClose={() => setCameraOpen(false)} />
+            ) : (
+              <button className={styles.primary} disabled={recognizing} onClick={() => setCameraOpen(true)}>
+                <Icon name="camera" /> Сделать фото
+              </button>
+            )}
+            <label className={styles.secondary} htmlFor="source-photo">
               <Icon name="camera" />
               {photo ? 'Заменить фото' : 'Выбрать фото'}
             </label>
@@ -476,8 +494,8 @@ export function SourcePage() {
                   event.target.value = '';
                   return;
                 }
-                setPhoto(file);
-                void recognize(file);
+                selectPhoto(file);
+                event.target.value = '';
               }}
             />
             {photo && (
@@ -568,7 +586,7 @@ export function SourcePage() {
       {error && <Notice error>{error}</Notice>}
       <button
         className={styles.primary}
-        disabled={mode !== 'manual' && (recognizing || !text.trim())}
+        disabled={mode !== 'manual' && (cameraOpen || recognizing || !text.trim())}
         onClick={() => void create()}
       >
         Продолжить <span>→</span>

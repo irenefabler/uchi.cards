@@ -821,3 +821,36 @@ describe('training direction', () => {
     expect(flashcardsApi.start).toHaveBeenCalledWith(1, 'reverse');
   });
 });
+
+it('recognizes a captured camera frame through the existing OCR flow', async () => {
+  stubPhotoPreview();
+  const stop = vi.fn();
+  vi.stubGlobal('navigator', {
+    mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }
+  });
+  const context = vi
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+  const blob = vi
+    .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+    .mockImplementation((callback) => callback(new Blob(['photo'], { type: 'image/jpeg' })));
+  vi.mocked(flashcardsApi.recognize).mockResolvedValue({ text: 'Кот — cat' });
+  try {
+    mount(<SourcePage />, '/new', '/new');
+    fireEvent.click(screen.getByRole('button', { name: 'Сделать фото' }));
+    const video = screen.getByLabelText('Предпросмотр камеры');
+    Object.defineProperties(video, { videoWidth: { value: 1920 }, videoHeight: { value: 1080 } });
+    fireEvent.loadedData(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Снять страницу' }));
+    const text = await screen.findByLabelText('Распознанный текст');
+    expect((text as HTMLTextAreaElement).value).toBe('Кот — cat');
+    expect(flashcardsApi.recognize).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'textbook-photo.jpg', type: 'image/jpeg' })
+    );
+    expect(screen.queryByLabelText('Предпросмотр камеры')).toBeNull();
+    await waitFor(() => expect(stop).toHaveBeenCalledOnce());
+  } finally {
+    context.mockRestore();
+    blob.mockRestore();
+  }
+});
