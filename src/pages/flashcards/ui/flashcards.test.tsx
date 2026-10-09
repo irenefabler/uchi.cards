@@ -705,3 +705,57 @@ it('rechecks cached resume data before showing the home title on navigation entr
   });
   await screen.findByRole('heading', { name: 'Хорошая работа!' });
 });
+
+it('blocks saving an old self-copy draft until its front becomes recallable', async () => {
+  sessionStorage.setItem(
+    'uchi-cards-editor-0',
+    JSON.stringify({
+      id: 0,
+      title: 'Словарные слова',
+      sourceType: 'photo',
+      revision: 0,
+      isDraft: true,
+      cards: [{ id: 0, question: 'арена', answer: 'арена', type: 'pair' }]
+    })
+  );
+  mount(<NewEditorPage />, '/new/review', '/new/review');
+  await screen.findByText(/Обе стороны совпадают/);
+  expect((screen.getByRole('button', { name: 'Сохранить набор' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Передняя сторона'), { target: { value: 'ар_на' } });
+  expect((screen.getByRole('button', { name: 'Сохранить набор' }) as HTMLButtonElement).disabled).toBe(false);
+});
+it('regenerates a cached self-copy draft without overwriting a touched title', async () => {
+  sessionStorage.setItem(
+    'uchi-cards-source-v1',
+    JSON.stringify({ sourceType: 'text', text: 'Словарные слова\nарена', filename: '' })
+  );
+  sessionStorage.setItem(
+    'uchi-cards-draft-source',
+    JSON.stringify({ sourceType: 'text', text: 'Словарные слова\nарена' })
+  );
+  sessionStorage.setItem(
+    'uchi-cards-editor-0',
+    JSON.stringify({
+      id: 0,
+      title: 'Моё название',
+      revision: 0,
+      cards: [{ id: 0, question: 'арена', answer: 'арена' }]
+    })
+  );
+  sessionStorage.setItem('uchi-cards-title-touched', 'true');
+  vi.mocked(flashcardsApi.generate)
+    .mockClear()
+    .mockResolvedValue({
+      suggestedTitle: 'Словарные слова',
+      cards: [{ id: 0, question: 'ар_на', answer: 'арена' }],
+      warnings: [],
+      demo: false
+    });
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: /Продолжить/ }));
+  await waitFor(() => expect(flashcardsApi.generate).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').cards[0].question).toBe('ар_на')
+  );
+  expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').title).toBe('Моё название');
+});

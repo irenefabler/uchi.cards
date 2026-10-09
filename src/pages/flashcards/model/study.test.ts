@@ -22,6 +22,7 @@ describe('study gestures', () => {
   });
   it('rejects incomplete and duplicate cards', () => {
     expect(validCards([{ question: 'Вопрос', answer: '' }])).toBe(false);
+    expect(validCards([{ question: 'арена', answer: ' Арена ' }])).toBe(false);
     expect(
       validCards([
         { question: 'Вопрос', answer: 'Ответ' },

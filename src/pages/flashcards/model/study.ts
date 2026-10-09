@@ -14,7 +14,12 @@ export function validCards(cards: { question: string; answer: string }[]) {
     cards.length > 0 &&
     cards.length <= 100 &&
     cards.every(
-      (card) => card.question.trim() && card.answer.trim() && card.question.length <= 500 && card.answer.length <= 2000
+      (card) =>
+        card.question.trim() &&
+        card.answer.trim() &&
+        card.question.trim().toLocaleLowerCase() !== card.answer.trim().toLocaleLowerCase() &&
+        card.question.length <= 500 &&
+        card.answer.length <= 2000
     ) &&
     new Set(questions).size === questions.length
   );

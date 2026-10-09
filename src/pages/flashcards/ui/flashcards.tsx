@@ -330,9 +330,21 @@ export function SourcePage() {
     const material = sourceType === 'manual' ? '' : text;
     const signature = JSON.stringify({ sourceType, text: material });
     sessionStorage.setItem(sourceKey, JSON.stringify({ sourceType, text: material, filename: photo?.name || '' }));
-    if (sessionStorage.getItem(draftSourceKey) === signature && sessionStorage.getItem(newDraftKey)) {
-      nav('/new/review');
-      return;
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(newDraftKey) || 'null');
+      if (
+        sessionStorage.getItem(draftSourceKey) === signature &&
+        Array.isArray(cached?.cards) &&
+        cached.cards.every(
+          (card: { question: string; answer: string }) =>
+            card.question.trim().toLocaleLowerCase() !== card.answer.trim().toLocaleLowerCase()
+        )
+      ) {
+        nav('/new/review');
+        return;
+      }
+    } catch {
+      /* Generate again if the cache is invalid. */
     }
     const request = ++generationRequest.current;
     setGenerating(true);
@@ -771,6 +783,10 @@ function Editor({ initial, warnings }: { initial: Deck; warnings?: string[] }) {
                 <CardText text={card.answer} />
               </div>
             )}
+            {card.question.trim() &&
+              card.question.trim().toLocaleLowerCase() === card.answer.trim().toLocaleLowerCase() && (
+                <Notice error>Обе стороны совпадают. Добавь на лицевую сторону задание или слово с пропуском.</Notice>
+              )}
             {!card.answer.trim() && <small>Добавьте ответ перед сохранением набора.</small>}
           </section>
         ))}
