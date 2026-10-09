@@ -282,15 +282,17 @@ export function SourcePage() {
       )}
       {mode !== 'manual' && (
         <Notice>
-          {demo
-            ? 'Демо-режим: источник не анализируется и никуда не отправляется. Вы увидите 3 тестовые карточки.'
-            : 'Распознавание и генерация пока не подключены. Создайте набор вручную.'}
+          {mode === 'text'
+            ? 'Создадим вопросы и ответы по вашему тексту. Перед сохранением их можно проверить и изменить.'
+            : demo
+            ? 'Демо-режим: фото не анализируется и никуда не отправляется. Вы увидите 3 тестовые карточки.'
+            : 'Распознавание фото пока не подключено. Вставьте текст или создайте набор вручную.'}
         </Notice>
       )}
       {error && <Notice error>{error}</Notice>}
       <button
         className={styles.primary}
-        disabled={mode !== 'manual' && (!demo || (mode === 'photo' ? !photo : !text.trim()))}
+        disabled={mode === 'photo' ? !demo || !photo : mode === 'text' && !text.trim()}
         onClick={() => {
           sessionStorage.setItem(
             sourceKey,
@@ -316,9 +318,10 @@ export function SettingsPage() {
     setBusy(true);
     setError('');
     try {
-      if (source.sourceType !== 'manual' && !Environment.demoGeneration)
+      if (source.sourceType === 'photo' && !Environment.demoGeneration)
         throw new Error('Генерация пока не подключена.');
-      const cards = source.sourceType === 'manual' ? [emptyCard()] : demoCards;
+      const generated = source.sourceType === 'text' ? await flashcardsApi.generate(source.text, count) : null;
+      const cards = generated ? generated.cards : source.sourceType === 'manual' ? [emptyCard()] : demoCards;
       const deck = await flashcardsApi.save({
         title: title.trim(),
         sourceType: source.sourceType,
@@ -366,13 +369,21 @@ export function SettingsPage() {
             </div>
           </section>
           <Notice>
-            Демо-генерация: покажем 3 тестовые карточки вместо {count}. Они не основаны на вашем источнике.
+            {source.sourceType === 'photo'
+              ? `Демо-генерация: покажем 3 тестовые карточки вместо ${count}. Фото не анализируется.`
+              : 'Создадим карточки по тексту. Если фактов мало, карточек может быть меньше.'}
           </Notice>
         </>
       )}
       {error && <Notice error>{error}</Notice>}
       <button className={styles.primary} disabled={!title.trim() || busy} onClick={() => void create()}>
-        {busy ? 'Создаём черновик…' : source.sourceType === 'manual' ? 'Добавить карточки' : 'Открыть демо-черновик'}{' '}
+        {busy
+          ? 'Создаём черновик…'
+          : source.sourceType === 'manual'
+          ? 'Добавить карточки'
+          : source.sourceType === 'photo'
+          ? 'Открыть демо-черновик'
+          : 'Создать карточки'}{' '}
         <span>→</span>
       </button>
     </Shell>
@@ -477,8 +488,11 @@ function Editor({ initial }: { initial: Deck }) {
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
         />
       </label>
-      {draft.sourceType !== 'manual' && (
-        <Notice>Тестовые карточки демо-режима. Исходное фото или текст не анализировались.</Notice>
+      {draft.sourceType === 'photo' && (
+        <Notice>Тестовые карточки демо-режима. Исходное фото не анализировалось.</Notice>
+      )}
+      {draft.sourceType === 'text' && (
+        <Notice>Карточки созданы по тексту. Проверьте вопросы и ответы перед сохранением.</Notice>
       )}
       <div className={styles.editList}>
         {draft.cards.map((card, index) => (

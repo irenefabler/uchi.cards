@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flashcardsApi, ApiError } from 'src/shared/api/flashcards';
 import type { StudySession } from 'src/shared/api/flashcards';
-import { EditorPage, SourcePage, StudyPage } from './flashcards';
+import { EditorPage, SourcePage, StudyPage, SettingsPage } from './flashcards';
 
 vi.mock('src/shared/api/flashcards', async (importOriginal) => {
   const original = await importOriginal<typeof import('src/shared/api/flashcards')>();
@@ -17,7 +17,8 @@ vi.mock('src/shared/api/flashcards', async (importOriginal) => {
       finish: vi.fn(),
       grade: vi.fn(),
       get: vi.fn(),
-      save: vi.fn()
+      save: vi.fn(),
+      generate: vi.fn()
     }
   };
 });
@@ -46,6 +47,7 @@ function mount(element: React.ReactNode, path = '/sessions/1', route = '/session
         <Routes>
           <Route path={route} element={element} />
           <Route path="/decks/:id" element={<p>Место сохранено</p>} />
+          <Route path="/decks/:id/edit" element={<p>Новый черновик</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -245,4 +247,42 @@ it('pauses without marking the session finished', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Выйти и продолжить позже' }));
   await screen.findByText('Место сохранено');
   expect(flashcardsApi.finish).not.toHaveBeenCalled();
+});
+
+it('generates real text cards and saves only the validated model result', async () => {
+  sessionStorage.setItem(
+    'uchi-cards-source-v1',
+    JSON.stringify({ sourceType: 'text', text: 'Материал урока', filename: '' })
+  );
+  vi.mocked(flashcardsApi.generate).mockResolvedValue({
+    cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }],
+    warnings: [],
+    demo: false
+  });
+  vi.mocked(flashcardsApi.save).mockResolvedValue({ id: 7 } as never);
+  mount(<SettingsPage />, '/new/settings', '/new/settings');
+  await userEvent.type(screen.getByLabelText('Название'), 'Урок');
+  await userEvent.click(screen.getByRole('button', { name: /Создать карточки/ }));
+  await waitFor(() => expect(flashcardsApi.generate).toHaveBeenCalledWith('Материал урока', 20));
+  await screen.findByText('Новый черновик');
+  expect(flashcardsApi.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sourceType: 'text',
+      cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }]
+    })
+  );
+});
+it('keeps source text on model failure and does not save a demo instead', async () => {
+  sessionStorage.setItem(
+    'uchi-cards-source-v1',
+    JSON.stringify({ sourceType: 'text', text: 'Материал урока', filename: '' })
+  );
+  vi.mocked(flashcardsApi.generate).mockRejectedValue(new ApiError(502, 'Не удалось создать карточки'));
+  vi.mocked(flashcardsApi.save).mockClear();
+  mount(<SettingsPage />, '/new/settings', '/new/settings');
+  await userEvent.type(screen.getByLabelText('Название'), 'Урок');
+  await userEvent.click(screen.getByRole('button', { name: /Создать карточки/ }));
+  await screen.findByText('Не удалось создать карточки');
+  expect(flashcardsApi.save).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem('uchi-cards-source-v1')).toContain('Материал урока');
 });

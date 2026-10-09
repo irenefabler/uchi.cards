@@ -45,13 +45,13 @@ export class ApiError extends Error {
     super(message);
   }
 }
-async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+async function request<T>(path: string, method = 'GET', body?: unknown, timeout = 15000): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method,
     credentials: 'same-origin',
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(timeout)
   });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
@@ -64,7 +64,10 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
+export type Generation = { cards: DeckInput['cards']; warnings: string[]; demo: boolean };
 export const flashcardsApi = {
+  generate: (text: string, count: number) =>
+    request<Generation>('/generations', 'POST', { sourceType: 'text', text, count }, 85000),
   list: (page = 1, draft = false) => request<Deck[]>(`/decks?page=${page}&draft=${draft}`),
   get: (id: number) => request<Deck>(`/decks/${id}`),
   save: (input: DeckInput, id?: number) => request<Deck>(id ? `/decks/${id}` : '/decks', id ? 'PUT' : 'POST', input),
