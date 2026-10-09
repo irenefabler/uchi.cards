@@ -68,7 +68,7 @@ const artwork = {
   restart: restartAsset
 };
 function Icon({ name }: { name: keyof typeof artwork }) {
-  return <img src={artwork[name]} alt="" aria-hidden="true" className={styles.icon} />;
+  return <img src={artwork[name]} alt="" aria-hidden="true" draggable={false} className={styles.icon} />;
 }
 
 const cardCountLabel = (count: number) => {
@@ -881,6 +881,7 @@ export function StudyPage() {
   const nav = useNavigate();
   const [flipped, setFlipped] = useState(false);
   const [dx, setDx] = useState(0);
+  const [departing, setDeparting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [exit, setExit] = useState(false);
@@ -891,7 +892,7 @@ export function StudyPage() {
   const card = session?.cards.find((value) => value.id === session.nextCardId);
   const cardNumber = session && card ? session.cards.findIndex((value) => value.id === card.id) + 1 : 0;
   const mastered = session?.knownCount || 0;
-  async function grade(status: 'known' | 'unknown') {
+  async function grade(status: 'known' | 'unknown', swipe = false) {
     if (!session || !card || lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -903,6 +904,13 @@ export function StudyPage() {
       presentationIndex: session.presentationIndex
     };
     try {
+      if (swipe) {
+        setDeparting(true);
+        setDx((status === 'known' ? 1 : -1) * (window.innerWidth + 500));
+        if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
+        }
+      }
       const result = await flashcardsApi.grade(id, pending.current);
       client.setQueryData(deckKeys.session(id), result);
       pending.current = null;
@@ -919,6 +927,7 @@ export function StudyPage() {
         await query.refetch();
       }
     } finally {
+      setDeparting(false);
       setDx(0);
       setBusy(false);
       lock.current = false;
@@ -947,12 +956,15 @@ export function StudyPage() {
   }
   function release(event: ReactPointerEvent<HTMLDivElement>) {
     const start = pointer.current;
+    if (!start || start.id !== event.pointerId) return;
     pointer.current = null;
-    setDx(0);
-    if (!start || start.id !== event.pointerId || busy || pending.current) return;
+    if (busy || pending.current) return;
     const action = gesture(event.clientX - start.x, event.clientY - start.y, start.width);
-    if (action === 'flip') setFlipped((prev) => !prev);
-    else if (action) void grade(action);
+    if (action === 'known' || action === 'unknown') void grade(action, true);
+    else {
+      setDx(0);
+      if (action === 'flip') setFlipped((prev) => !prev);
+    }
   }
   useEffect(() => {
     if (session?.finishedAt) nav(`/sessions/${id}/results`, { replace: true });
@@ -998,9 +1010,10 @@ export function StudyPage() {
               aria-disabled={busy || !!pending.current}
               className={`${styles.studyCard} ${dx > 0 ? styles.known : dx < 0 ? styles.unknown : ''}`}
               style={{
-                transform: `translateX(${dx}px) rotate(${dx / 30}deg)`,
-                transition: dx === 0 ? 'transform 180ms ease-out' : 'none'
+                transform: `translateX(${dx}px) rotate(${Math.max(-12, Math.min(12, dx / 30))}deg)`,
+                transition: departing || dx === 0 ? 'transform 180ms ease-out' : 'none'
               }}
+              onDragStart={(event) => event.preventDefault()}
               onPointerDown={(event) => {
                 if (busy || pending.current || pointer.current || event.button !== 0) return;
                 pointer.current = {
@@ -1028,7 +1041,8 @@ export function StudyPage() {
                 pointer.current = null;
                 setDx(0);
               }}
-              onLostPointerCapture={() => {
+              onLostPointerCapture={(event) => {
+                if (pointer.current?.id !== event.pointerId) return;
                 pointer.current = null;
                 setDx(0);
               }}
@@ -1044,8 +1058,8 @@ export function StudyPage() {
               }}
             >
               <span className={styles.srOnly}>{flipped ? 'ОТВЕТ' : 'ВОПРОС'}</span>
-              <img className={styles.arcTop} src={artwork.arcTop} alt="" aria-hidden="true" />
-              <img className={styles.arcBottom} src={artwork.arcBottom} alt="" aria-hidden="true" />
+              <img className={styles.arcTop} src={artwork.arcTop} draggable={false} alt="" aria-hidden="true" />
+              <img className={styles.arcBottom} src={artwork.arcBottom} draggable={false} alt="" aria-hidden="true" />
               <Sprout kind="studyLeaf" />
               <h2>{flipped ? card.answer : card.question}</h2>
               <small>Нажми, чтобы перевернуть</small>

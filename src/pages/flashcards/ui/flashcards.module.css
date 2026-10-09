@@ -852,6 +852,10 @@
   overflow-wrap: anywhere;
   box-shadow: 0 8px 24px #0d0b3033;
 }
+.studyCard img {
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
 .studyCard > :not(.arcTop, .arcBottom) {
   position: relative;
 }

@@ -66,7 +66,43 @@ beforeEach(() => {
   vi.mocked(flashcardsApi.recognize).mockReset();
 });
 
+function enablePointerEvents() {
+  class TestPointerEvent extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, props: PointerEventInit) {
+      super(type, props);
+      this.pointerId = props.pointerId || 1;
+    }
+  }
+  vi.stubGlobal('PointerEvent', TestPointerEvent);
+  Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
+}
+
 describe('study interaction', () => {
+  it.each([
+    [-120, 'unknown', false],
+    [120, 'known', true]
+  ] as const)('swipes %s pixels as %s (flipped=%s) without native image drag', async (distance, status, flipped) => {
+    enablePointerEvents();
+    vi.mocked(flashcardsApi.grade).mockResolvedValue({ ...session, nextCardId: 11, presentationIndex: 1 });
+    mount(<StudyPage />);
+    const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
+    if (flipped) fireEvent.keyDown(card, { key: 'Enter' });
+    expect(card.querySelector('img')?.getAttribute('draggable')).toBe('false');
+    expect(fireEvent.dragStart(card.querySelector('img')!)).toBe(false);
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(card, { pointerId: 1, clientX: 200 + distance, clientY: 200 });
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 200 + distance, clientY: 200 });
+    const departure = card.style.transform;
+    expect(departure).not.toContain('translateX(0px)');
+    fireEvent.lostPointerCapture(card, { pointerId: 1 });
+    expect(card.style.transform).toBe(departure);
+    expect(screen.getByRole('button', { name: 'Знаю' }).hasAttribute('disabled')).toBe(true);
+    await screen.findByRole('button', { name: 'Карточка 2. Вопрос: Второй вопрос' });
+    expect(flashcardsApi.grade).toHaveBeenCalledTimes(1);
+    expect(flashcardsApi.grade).toHaveBeenCalledWith(1, expect.objectContaining({ cardId: 10, status }));
+  });
+
   it.each([
     ['Не знаю', 'unknown', false],
     ['Знаю', 'known', false],
@@ -149,15 +185,7 @@ describe('study interaction', () => {
     expect(vi.mocked(flashcardsApi.grade).mock.calls[0]).toEqual(vi.mocked(flashcardsApi.grade).mock.calls[1]);
   });
   it('handles tap, cancelled and vertical pointer gestures without grading', async () => {
-    class TestPointerEvent extends MouseEvent {
-      pointerId: number;
-      constructor(type: string, props: PointerEventInit) {
-        super(type, props);
-        this.pointerId = props.pointerId || 1;
-      }
-    }
-    vi.stubGlobal('PointerEvent', TestPointerEvent);
-    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
+    enablePointerEvents();
     mount(<StudyPage />);
     const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
     fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 100, clientY: 200 });
