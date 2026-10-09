@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode, PointerEvent as ReactPointerEvent } from 'react';
+import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router';
 import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
-import { gesture, validCards } from '../model/study';
+import { validCards } from '../model/study';
 import leafAsset from './assets/6-6045-img.svg';
 import chevronAsset from './assets/6-6045-imgChevronRight.svg';
 import plusAsset from './assets/6-6045-imgPlus.svg';
@@ -25,16 +25,13 @@ import previewLeafAsset from './assets/6-6284-img1.svg';
 import brainAsset from './assets/6-6284-imgBrain.svg';
 import playAsset from './assets/6-6284-imgPlay.svg';
 import previewSunAsset from './assets/6-6284-imgSun.svg';
-import arcTopAsset from './assets/6-6351-img.svg';
-import arcBottomAsset from './assets/6-6351-img1.svg';
-import studyLeafAsset from './assets/6-6351-img2.svg';
-import flipAsset from './assets/6-6351-imgRotate3D.svg';
 import closeAsset from './assets/6-6351-imgX.svg';
 import cupAsset from './assets/6-6395-img.svg';
 import checkAsset from './assets/6-6395-imgCheck.svg';
 import restartAsset from './assets/6-6395-imgRotateCcw.svg';
 import adviceAsset from './assets/6-6395-imgSparkles.svg';
 import styles from './flashcards.module.css';
+import { GestureCard } from './gesture-card';
 
 const artwork = {
   leaf: leafAsset,
@@ -58,10 +55,6 @@ const artwork = {
   previewSun: previewSunAsset,
   previewLeaf: previewLeafAsset,
   close: closeAsset,
-  arcTop: arcTopAsset,
-  arcBottom: arcBottomAsset,
-  studyLeaf: studyLeafAsset,
-  flip: flipAsset,
   cup: cupAsset,
   check: checkAsset,
   advice: adviceAsset,
@@ -179,7 +172,7 @@ function Progress({
 function Sprout({
   kind = 'leaf'
 }: {
-  kind?: 'leaf' | 'sun' | 'book' | 'photo' | 'cup' | 'deckLeaf' | 'studyLeaf' | 'previewLeaf' | 'previewSun';
+  kind?: 'leaf' | 'sun' | 'book' | 'photo' | 'cup' | 'deckLeaf' | 'previewLeaf' | 'previewSun';
 }) {
   return (
     <div className={`${styles.art} ${styles[kind] ?? ''}`} aria-hidden="true">
@@ -879,56 +872,43 @@ export function StudyPage() {
   const query = useQuery({ queryKey: deckKeys.session(id), queryFn: () => flashcardsApi.session(id) });
   const client = useQueryClient();
   const nav = useNavigate();
-  const [flipped, setFlipped] = useState(false);
-  const [dx, setDx] = useState(0);
-  const [departing, setDeparting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [exit, setExit] = useState(false);
   const lock = useRef(false);
-  const pointer = useRef<{ id: number; x: number; y: number; width: number } | null>(null);
   const pending = useRef<Grade | null>(null);
   const session = query.data;
   const card = session?.cards.find((value) => value.id === session.nextCardId);
   const cardNumber = session && card ? session.cards.findIndex((value) => value.id === card.id) + 1 : 0;
   const mastered = session?.knownCount || 0;
-  async function grade(status: 'known' | 'unknown', swipe = false) {
-    if (!session || !card || lock.current) return;
+  async function grade(status: 'known' | 'unknown', actionId?: string): Promise<boolean> {
+    if (!session || !card || lock.current) return false;
     lock.current = true;
     setBusy(true);
     setError('');
     pending.current ||= {
       cardId: card.id,
       status,
-      eventId: crypto.randomUUID(),
+      eventId: actionId ?? crypto.randomUUID(),
       presentationIndex: session.presentationIndex
     };
     try {
-      if (swipe) {
-        setDeparting(true);
-        setDx((status === 'known' ? 1 : -1) * (window.innerWidth + 500));
-        if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
-        }
-      }
       const result = await flashcardsApi.grade(id, pending.current);
       client.setQueryData(deckKeys.session(id), result);
       pending.current = null;
-      setFlipped(false);
       if (result.finishedAt) {
         await client.invalidateQueries({ queryKey: deckKeys.all });
         nav(`/sessions/${id}/results`, { replace: true });
       }
+      return true;
     } catch (err) {
       setError(message(err));
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
         pending.current = null;
-        setFlipped(false);
         await query.refetch();
       }
+      return false;
     } finally {
-      setDeparting(false);
-      setDx(0);
       setBusy(false);
       lock.current = false;
     }
@@ -953,18 +933,6 @@ export function StudyPage() {
     if (lock.current) return;
     await client.invalidateQueries({ queryKey: deckKeys.all });
     nav(`/decks/${session?.deckId}`);
-  }
-  function release(event: ReactPointerEvent<HTMLDivElement>) {
-    const start = pointer.current;
-    if (!start || start.id !== event.pointerId) return;
-    pointer.current = null;
-    if (busy || pending.current) return;
-    const action = gesture(event.clientX - start.x, event.clientY - start.y, start.width);
-    if (action === 'known' || action === 'unknown') void grade(action, true);
-    else {
-      setDx(0);
-      if (action === 'flip') setFlipped((prev) => !prev);
-    }
   }
   useEffect(() => {
     if (session?.finishedAt) nav(`/sessions/${id}/results`, { replace: true });
@@ -998,90 +966,20 @@ export function StudyPage() {
         label="Тренировка"
         counter={`${mastered} из ${session?.cards.length} освоено`}
       />
-      {card && (
-        <>
-          <div className={styles.cardStack}>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={`Карточка ${cardNumber}. ${flipped ? 'Ответ' : 'Вопрос'}: ${
-                flipped ? card.answer : card.question
-              }`}
-              aria-disabled={busy || !!pending.current}
-              className={`${styles.studyCard} ${dx > 0 ? styles.known : dx < 0 ? styles.unknown : ''}`}
-              style={{
-                transform: `translateX(${dx}px) rotate(${Math.max(-12, Math.min(12, dx / 30))}deg)`,
-                transition: departing || dx === 0 ? 'transform 180ms ease-out' : 'none'
-              }}
-              onDragStart={(event) => event.preventDefault()}
-              onPointerDown={(event) => {
-                if (busy || pending.current || pointer.current || event.button !== 0) return;
-                pointer.current = {
-                  id: event.pointerId,
-                  x: event.clientX,
-                  y: event.clientY,
-                  width: event.currentTarget.clientWidth
-                };
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerMove={(event) => {
-                const start = pointer.current;
-                if (!start || start.id !== event.pointerId) return;
-                const x = event.clientX - start.x,
-                  y = event.clientY - start.y;
-                if (Math.abs(y) > Math.abs(x) && Math.abs(y) > 8) {
-                  pointer.current = null;
-                  setDx(0);
-                  return;
-                }
-                setDx(x);
-              }}
-              onPointerUp={release}
-              onPointerCancel={() => {
-                pointer.current = null;
-                setDx(0);
-              }}
-              onLostPointerCapture={(event) => {
-                if (pointer.current?.id !== event.pointerId) return;
-                pointer.current = null;
-                setDx(0);
-              }}
-              onKeyDown={(event) => {
-                if (busy || pending.current) return;
-                if (['Enter', ' '].includes(event.key)) {
-                  event.preventDefault();
-                  setFlipped((prev) => !prev);
-                } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                  event.preventDefault();
-                  void grade(event.key === 'ArrowRight' ? 'known' : 'unknown');
-                }
-              }}
-            >
-              <span className={styles.srOnly}>{flipped ? 'ОТВЕТ' : 'ВОПРОС'}</span>
-              <img className={styles.arcTop} src={artwork.arcTop} draggable={false} alt="" aria-hidden="true" />
-              <img className={styles.arcBottom} src={artwork.arcBottom} draggable={false} alt="" aria-hidden="true" />
-              <Sprout kind="studyLeaf" />
-              <h2>{flipped ? card.answer : card.question}</h2>
-              <small>Нажми, чтобы перевернуть</small>
-              <Icon name="flip" />
-            </div>
-          </div>
-          <div className={styles.studyHint}>
-            <strong>{flipped ? 'Проверь себя' : 'Вспомни ответ'}</strong>
-            <p>
-              {flipped ? 'Смахни влево, если не знаешь, вправо — если знаешь' : 'Переверни карточку и проверь себя'}
-            </p>
-          </div>
-          <div className={styles.gradeActions}>
-            <button aria-label="Не знаю" disabled={busy || !!pending.current} onClick={() => void grade('unknown')}>
-              <span aria-hidden="true">‹</span> Не знаю
-            </button>
-            <button aria-label="Знаю" disabled={busy || !!pending.current} onClick={() => void grade('known')}>
-              Знаю <span aria-hidden="true">›</span>
-            </button>
-          </div>
-        </>
+      {card && session && (
+        <GestureCard
+          cardId={card.id}
+          token={`${session.id}:${session.presentationIndex}:${card.id}`}
+          number={cardNumber}
+          question={card.question}
+          answer={card.answer}
+          disabled={busy || !!pending.current}
+          onGrade={grade}
+        />
       )}
+      <span className={styles.srOnly} role="status" aria-live="polite">
+        Освоено {mastered} из {session?.cards.length}
+      </span>
       {busy && <Notice>Сохраняем ответ…</Notice>}
       {error && (
         <>

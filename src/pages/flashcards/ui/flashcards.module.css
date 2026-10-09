@@ -426,6 +426,8 @@
   border-radius: 26px;
 }
 .studyLeaf {
+  display: grid;
+  place-items: center;
   width: 150px;
   height: 151px;
   background: transparent;
@@ -822,6 +824,7 @@
 }
 .cardStack {
   position: relative;
+  perspective: 1100px;
   margin: 22px 0 28px;
   padding-bottom: 18px;
 }
@@ -831,6 +834,69 @@
   inset: 14px 11px 0;
   background: #554a9a;
   border-radius: 28px;
+}
+.cardStack::after {
+  content: '';
+  position: absolute;
+  inset: 24px 22px -8px;
+  z-index: -1;
+  background: var(--field);
+  border-radius: 28px;
+  pointer-events: none;
+}
+.gestureShell {
+  position: relative;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  will-change: transform, opacity;
+}
+.gestureShell[data-motion='dragging'] {
+  cursor: grabbing;
+}
+.liftShell {
+  transform-style: preserve-3d;
+}
+.flipRotor {
+  display: grid;
+  transform-style: preserve-3d;
+  transform: rotateY(0deg);
+}
+.flipRotor[data-flipped='true'] {
+  transform: rotateY(180deg);
+}
+.cardFace {
+  grid-area: 1 / 1;
+  min-width: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.backFace {
+  transform: rotateY(180deg);
+}
+.swipeStamp {
+  position: absolute;
+  top: 30px;
+  border: 3px solid currentColor;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  font-size: 22px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+}
+.knownStamp {
+  left: 24px;
+  color: var(--lime);
+  transform: rotate(-12deg);
+}
+.unknownStamp {
+  right: 24px;
+  color: var(--coral);
+  transform: rotate(12deg);
 }
 .studyCard {
   position: relative;
@@ -1098,5 +1164,16 @@
 @media (prefers-reduced-motion: reduce) {
   .app * {
     transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flipRotor,
+  .flipRotor[data-flipped='true'],
+  .backFace {
+    transform: none;
+  }
+  .cardFace[aria-hidden='true'] {
+    visibility: hidden;
   }
 }

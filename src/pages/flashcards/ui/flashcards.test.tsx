@@ -87,7 +87,10 @@ describe('study interaction', () => {
     vi.mocked(flashcardsApi.grade).mockResolvedValue({ ...session, nextCardId: 11, presentationIndex: 1 });
     mount(<StudyPage />);
     const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
-    if (flipped) fireEvent.keyDown(card, { key: 'Enter' });
+    if (flipped) {
+      fireEvent.keyDown(card, { key: 'Enter' });
+      await waitFor(() => expect(card.getAttribute('aria-disabled')).toBe('false'));
+    }
     expect(card.querySelector('img')?.getAttribute('draggable')).toBe('false');
     expect(fireEvent.dragStart(card.querySelector('img')!)).toBe(false);
     fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 200, clientY: 200 });
@@ -116,7 +119,10 @@ describe('study interaction', () => {
     });
     mount(<StudyPage />);
     const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
-    if (flipped) fireEvent.keyDown(card, { key: 'Enter' });
+    if (flipped) {
+      fireEvent.keyDown(card, { key: 'Enter' });
+      await waitFor(() => expect(card.getAttribute('aria-disabled')).toBe('false'));
+    }
     expect(screen.queryByRole('button', { name: 'Показать ответ' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: label }));
     await screen.findByRole('button', { name: 'Карточка 2. Вопрос: Второй вопрос' });
@@ -137,6 +143,7 @@ describe('study interaction', () => {
     fireEvent.keyDown(card, { key: 'Enter' });
     expect(screen.getByRole('button', { name: 'Карточка 1. Ответ: Ответ' })).toBeTruthy();
     expect(flashcardsApi.grade).not.toHaveBeenCalled();
+    await waitFor(() => expect(card.getAttribute('aria-disabled')).toBe('false'));
     fireEvent.keyDown(card, { key: 'ArrowRight' });
     await screen.findByRole('button', { name: 'Карточка 2. Вопрос: Второй вопрос' });
     expect(flashcardsApi.grade).toHaveBeenCalledWith(1, expect.objectContaining({ cardId: 10, status: 'known' }));
@@ -154,7 +161,7 @@ describe('study interaction', () => {
     fireEvent.keyDown(card, { key: 'ArrowLeft' });
     expect(screen.getByRole('button', { name: 'Знаю' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: 'Не знаю' }).hasAttribute('disabled')).toBe(true);
-    expect(flashcardsApi.grade).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(flashcardsApi.grade).toHaveBeenCalledTimes(1));
     resolve({
       ...session,
       nextCardId: 11,
