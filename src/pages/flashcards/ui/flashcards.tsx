@@ -126,12 +126,14 @@ function Progress({
   value,
   label = 'Освоено в последней тренировке',
   compact = false,
-  counter
+  counter,
+  colored = false
 }: {
   value: number | null;
   label?: string;
   compact?: boolean;
   counter?: string;
+  colored?: boolean;
 }) {
   return (
     <div className={`${styles.progress} ${compact ? styles.compactProgress : ''}`}>
@@ -150,7 +152,18 @@ function Progress({
           aria-valuemin={0}
           aria-valuemax={100}
         >
-          <span style={{ width: `${value ?? 0}%` }} />
+          <span
+            style={{
+              width: `${value ?? 0}%`,
+              backgroundColor: colored
+                ? (value ?? 0) < 30
+                  ? '#FF716D'
+                  : (value ?? 0) < 85
+                  ? '#9387FF'
+                  : '#E1FF97'
+                : undefined
+            }}
+          />
         </div>
         {compact && <span className={styles.progressValue}>{value === null ? '—' : `${value}%`}</span>}
       </div>
@@ -237,7 +250,7 @@ export function LibraryPage() {
                 </span>
               </div>
               <small>{cardCountLabel(deck.cards.length)}</small>
-              <Progress value={deck.knowledgePercent} compact />
+              <Progress value={deck.knowledgePercent} compact colored />
             </div>
           </Link>
         ))}
