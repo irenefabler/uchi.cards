@@ -824,15 +824,47 @@ export function DeckPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const deckId = Number(useParams().id);
+  const [direction, setDirection] = useState<'forward' | 'reverse'>(() => {
+    try {
+      return localStorage.getItem(`uchi-cards-direction-${deckId}`) === 'reverse' ? 'reverse' : 'forward';
+    } catch {
+      return 'forward';
+    }
+  });
+  useEffect(() => {
+    try {
+      setDirection(localStorage.getItem(`uchi-cards-direction-${deckId}`) === 'reverse' ? 'reverse' : 'forward');
+    } catch {
+      setDirection('forward');
+    }
+  }, [deckId]);
+  const activeId = query.data?.activeSessionId || 0;
+  const active = useQuery({
+    queryKey: deckKeys.session(activeId),
+    queryFn: () => flashcardsApi.session(activeId),
+    enabled: activeId > 0
+  });
+  const canResume =
+    activeId > 0 && active.data && !active.data.finishedAt && (active.data.direction || 'forward') === direction;
+  function swapDirection() {
+    const next = direction === 'forward' ? 'reverse' : 'forward';
+    setDirection(next);
+    try {
+      localStorage.setItem(`uchi-cards-direction-${deckId}`, next);
+    } catch {
+      /* The current screen still retains the selection. */
+    }
+  }
   async function start() {
     if (!query.data) return;
-    if (query.data.activeSessionId) {
-      nav(`/sessions/${query.data.activeSessionId}`);
+    if (canResume) {
+      nav(`/sessions/${activeId}`);
       return;
     }
     setBusy(true);
     try {
-      const session = await flashcardsApi.start(query.data.id);
+      const session = await flashcardsApi.start(query.data.id, direction);
       client.setQueryData(deckKeys.session(session.id), session);
       nav(`/sessions/${session.id}`);
     } catch (err) {
@@ -894,10 +926,10 @@ export function DeckPage() {
       </section>
       <button
         className={styles.primary}
-        disabled={busy || deck.isDraft || !deck.cards.length}
+        disabled={busy || deck.isDraft || !deck.cards.length || (activeId > 0 && (active.isPending || active.isError))}
         onClick={() => void start()}
       >
-        <Icon name="play" /> {deck.activeSessionId ? 'Продолжить тренировку' : 'Начать тренировку'}
+        <Icon name="play" /> {canResume ? 'Продолжить тренировку' : 'Начать тренировку'}
       </button>
       <div className={styles.row}>
         <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
@@ -908,30 +940,31 @@ export function DeckPage() {
         </button>
       </div>
       {error && <Notice error>{error}</Notice>}
-      <h2 className={styles.examplesTitle}>Примеры карточек</h2>
+      {active.isError && <Failure error={active.error} retry={() => void active.refetch()} />}
+      <div className={`${styles.row} ${styles.examplesHeader}`}>
+        <h2 className={styles.examplesTitle}>Примеры карточек</h2>
+        <button className={styles.textButton} disabled={busy || !deck.cards.length} onClick={swapDirection}>
+          Поменять местами
+        </button>
+      </div>
+      <div className={styles.pairColumns} aria-label="Направление тренировки">
+        <small>Передняя сторона</small>
+        <small>Обратная сторона</small>
+      </div>
       <div className={styles.deckList}>
         {deck.cards.slice(0, showAll ? 100 : 4).map((card) => (
-          <details key={card.id} className={`${styles.panel} ${styles.previewCard}`}>
-            <summary>
-              <span>
-                <CardText text={card.question} />
-                <small>Нажми, чтобы увидеть ответ</small>
-              </span>
-              <span className={styles.chevron}>
-                <Icon name="chevron" />
-              </span>
-            </summary>
-            <p>
-              <CardText text={card.answer} />
-            </p>
-            <small>
-              {card.knowledgeStatus === 'known'
-                ? 'Знаю'
-                : card.knowledgeStatus === 'unknown'
-                ? 'Пока не знаю'
-                : 'Ещё не изучали'}
-            </small>
-          </details>
+          <section
+            key={card.id}
+            className={`${styles.panel} ${styles.pairColumns}`}
+            aria-label={`Карточка ${deck.cards.indexOf(card) + 1}`}
+          >
+            <div>
+              <CardText text={direction === 'forward' ? card.question : card.answer} />
+            </div>
+            <div>
+              <CardText text={direction === 'forward' ? card.answer : card.question} />
+            </div>
+          </section>
         ))}
       </div>
       {deck.cards.length > 4 && (
@@ -1132,7 +1165,7 @@ export function ResultsPage() {
     if (!query.data) return;
     setBusy(true);
     try {
-      const session = await flashcardsApi.start(query.data.deckId);
+      const session = await flashcardsApi.start(query.data.deckId, query.data.direction || 'forward');
       nav(`/sessions/${session.id}`);
     } catch (err) {
       setError(message(err));

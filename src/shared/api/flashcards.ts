@@ -46,6 +46,7 @@ export type DeckInput = Pick<
   cards: (Pick<Card, 'id' | 'question' | 'answer'> & CardSemantics)[];
 };
 export type StudySession = {
+  direction?: 'forward' | 'reverse';
   nextCardId: number;
   presentationIndex: number;
   learningCards: Record<
@@ -125,7 +126,8 @@ export const flashcardsApi = {
   get: (id: number) => request<Deck>(`/decks/${id}`),
   save: (input: DeckInput, id?: number) => request<Deck>(id ? `/decks/${id}` : '/decks', id ? 'PUT' : 'POST', input),
   remove: (id: number) => request<void>(`/decks/${id}`, 'DELETE'),
-  start: (id: number) => request<StudySession>(`/decks/${id}/sessions`, 'POST'),
+  start: (id: number, direction: 'forward' | 'reverse' = 'forward') =>
+    request<StudySession>(`/decks/${id}/sessions`, 'POST', { direction }),
   session: (id: number) => request<StudySession>(`/sessions/${id}`),
   grade: (id: number, grade: Grade) => request<StudySession>(`/sessions/${id}/answers`, 'POST', grade),
   finish: (id: number) => request<StudySession>(`/sessions/${id}/finish`, 'POST')

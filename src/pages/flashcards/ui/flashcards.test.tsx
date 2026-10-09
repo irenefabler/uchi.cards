@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flashcardsApi, ApiError } from 'src/shared/api/flashcards';
 import type { StudySession } from 'src/shared/api/flashcards';
-import { EditorPage, SourcePage, StudyPage, NewEditorPage, LibraryPage } from './flashcards';
+import { EditorPage, SourcePage, StudyPage, NewEditorPage, LibraryPage, DeckPage, ResultsPage } from './flashcards';
 
 vi.mock('src/shared/api/flashcards', async (importOriginal) => {
   const original = await importOriginal<typeof import('src/shared/api/flashcards')>();
@@ -14,6 +14,7 @@ vi.mock('src/shared/api/flashcards', async (importOriginal) => {
     flashcardsApi: {
       ...original.flashcardsApi,
       session: vi.fn(),
+      start: vi.fn(),
       list: vi.fn(),
       home: vi.fn(),
       finish: vi.fn(),
@@ -51,6 +52,7 @@ function mount(element: React.ReactNode, path = '/sessions/1', route = '/session
           <Route path={route} element={element} />
           <Route path="/decks/:id" element={<p>Место сохранено</p>} />
           {route !== '/new/review' && <Route path="/new/review" element={<p>Проверка нового набора</p>} />}
+          {route !== '/sessions/:id' && <Route path="/sessions/:id" element={<p>Тренировка открыта</p>} />}
           <Route path="/decks/:id/edit" element={<p>Новый черновик</p>} />
         </Routes>
       </MemoryRouter>
@@ -62,9 +64,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   sessionStorage.clear();
+  localStorage.clear();
 });
 beforeEach(() => {
   vi.mocked(flashcardsApi.session).mockResolvedValue(structuredClone(session));
+  vi.mocked(flashcardsApi.start).mockReset().mockResolvedValue(structuredClone(session));
   vi.mocked(flashcardsApi.grade).mockReset();
   vi.mocked(flashcardsApi.recognize).mockReset();
 });
@@ -758,4 +762,62 @@ it('regenerates a cached self-copy draft without overwriting a touched title', a
     expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').cards[0].question).toBe('ар_на')
   );
   expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').title).toBe('Моё название');
+});
+
+describe('training direction', () => {
+  const deck = {
+    id: 1,
+    title: 'Животные',
+    sourceType: 'photo' as const,
+    revision: 1,
+    isDraft: false,
+    cards: [{ id: 10, question: 'кот', answer: 'cat', knowledgeStatus: null }],
+    knownCount: 0,
+    reviewedCount: 0,
+    knowledgePercent: null,
+    activeSessionId: null
+  };
+  it('shows both editable-source sides without hints or arrows and starts the selected direction', async () => {
+    vi.mocked(flashcardsApi.get).mockResolvedValue(deck);
+    mount(<DeckPage />, '/decks/1', '/decks/:id');
+    const row = await screen.findByRole('region', { name: 'Карточка 1' });
+    expect(row.textContent).toBe('котcat');
+    expect(screen.queryByText('Нажми, чтобы увидеть ответ')).toBeNull();
+    expect(row.querySelector('button, summary')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Поменять местами' }));
+    expect(row.textContent).toBe('catкот');
+    expect(localStorage.getItem('uchi-cards-direction-1')).toBe('reverse');
+    await userEvent.click(screen.getByRole('button', { name: 'Начать тренировку' }));
+    await screen.findByText('Тренировка открыта');
+    expect(flashcardsApi.start).toHaveBeenCalledWith(1, 'reverse');
+  });
+  it('resumes a matching direction without creating a new session', async () => {
+    localStorage.setItem('uchi-cards-direction-1', 'reverse');
+    vi.mocked(flashcardsApi.get).mockResolvedValue({ ...deck, activeSessionId: 1 });
+    vi.mocked(flashcardsApi.session).mockResolvedValue({ ...session, direction: 'reverse' });
+    mount(<DeckPage />, '/decks/1', '/decks/:id');
+    await userEvent.click(await screen.findByRole('button', { name: 'Продолжить тренировку' }));
+    await screen.findByText('Тренировка открыта');
+    expect(flashcardsApi.start).not.toHaveBeenCalled();
+  });
+  it('starts a new direction instead of resuming the opposite direction', async () => {
+    vi.mocked(flashcardsApi.get).mockResolvedValue({ ...deck, activeSessionId: 1 });
+    mount(<DeckPage />, '/decks/1', '/decks/:id');
+    await screen.findByRole('button', { name: 'Продолжить тренировку' });
+    await userEvent.click(screen.getByRole('button', { name: 'Поменять местами' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Начать тренировку' }));
+    await screen.findByText('Тренировка открыта');
+    expect(flashcardsApi.start).toHaveBeenCalledWith(1, 'reverse');
+  });
+  it('keeps the reversed direction when repeating a completed session', async () => {
+    vi.mocked(flashcardsApi.session).mockResolvedValue({
+      ...session,
+      direction: 'reverse',
+      finishedAt: '2026-10-09T10:00:00Z'
+    });
+    mount(<ResultsPage />, '/sessions/1/results', '/sessions/:id/results');
+    await userEvent.click(await screen.findByRole('button', { name: 'Пройти ещё раз' }));
+    await screen.findByText('Тренировка открыта');
+    expect(flashcardsApi.start).toHaveBeenCalledWith(1, 'reverse');
+  });
 });

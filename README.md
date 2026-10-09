@@ -144,3 +144,15 @@ CI/CD на основе шаблона:
 ## 🧠 Дополнительно
 
 Проект следует принципам Feature-Sliced Design. Подробности — [feature-sliced.design](https://feature-sliced.github.io/documentation/ru/)
+
+### Training direction and preview
+
+The deck page displays both card sides in two columns without answer hints or
+arrow buttons. "Swap sides" selects the preview and next session direction;
+selection is retained per deck in browser localStorage. A running session resumes
+only when its direction matches the selection. Repeating results keeps that
+session's direction. Canonical deck content is not rewritten.
+
+Validation: build, lint and 72 tests passed, including preview, direction selection,
+matching-session resume, opposite-direction start and reversed results restart.
+Browser QA used an isolated local deck and verified reversal, flip and reload.
