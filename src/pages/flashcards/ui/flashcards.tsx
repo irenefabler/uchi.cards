@@ -912,7 +912,7 @@ export function DeckPage() {
     );
   const deck = query.data;
   return (
-    <Shell back="/" navigationTitle="Мой набор">
+    <Shell>
       <div className={styles.deckHeading}>
         <CoverIcon id={deck.coverIconId} large />
         <div>
@@ -943,14 +943,6 @@ export function DeckPage() {
       >
         <Icon name="play" /> {canResume ? 'Продолжить тренировку' : 'Начать тренировку'}
       </button>
-      <div className={`${styles.row} ${styles.deckActions}`}>
-        <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
-          Редактировать
-        </Link>
-        <button className={styles.textButton} disabled={busy} onClick={() => void remove()}>
-          Удалить набор
-        </button>
-      </div>
       {error && <Notice error>{error}</Notice>}
       {active.isError && <Failure error={active.error} retry={() => void active.refetch()} />}
       <div className={`${styles.row} ${styles.examplesHeader}`}>
@@ -959,7 +951,7 @@ export function DeckPage() {
           Поменять местами
         </button>
       </div>
-      <div className={styles.pairColumns} aria-label="Направление тренировки">
+      <div className={`${styles.pairColumns} ${styles.pairLabels}`} aria-label="Направление тренировки">
         <small>Передняя сторона</small>
         <small>Обратная сторона</small>
       </div>
@@ -978,6 +970,14 @@ export function DeckPage() {
             </div>
           </section>
         ))}
+      </div>
+      <div className={`${styles.row} ${styles.deckActions}`}>
+        <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
+          Редактировать набор
+        </Link>
+        <button className={styles.textButton} disabled={busy} onClick={() => void remove()}>
+          Удалить набор
+        </button>
       </div>
     </Shell>
   );

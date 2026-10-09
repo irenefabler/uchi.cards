@@ -1354,3 +1354,5 @@
 .deckActions > .textButton:hover {
   color: #d3cdeb;
 }
+
+.pairLabels { margin: 4px 0 12px; padding: 0 16px; }
