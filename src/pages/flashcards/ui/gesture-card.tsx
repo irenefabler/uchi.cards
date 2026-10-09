@@ -319,7 +319,6 @@ export function GestureCard({ cardId, token, number, question, answer, disabled,
         </div>
       </div>
       <div className={styles.studyHint}>
-        <strong>{flipped ? 'Проверь себя' : 'Вспомни ответ'}</strong>
         <p>{flipped ? 'Смахни влево, если не знаешь, вправо — если знаешь' : 'Переверни карточку и проверь себя'}</p>
       </div>
       <div className={styles.gradeActions} data-grade-actions>
