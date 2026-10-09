@@ -433,7 +433,7 @@ it.each(['pair', 'definition'] as const)('edits both %s sides and preserves sema
   const back = screen.getByLabelText('Обратная сторона');
   expect((front as HTMLTextAreaElement).value).toBe('Кровать');
   expect((back as HTMLTextAreaElement).value).toBe('Bed');
-  expect(screen.getByText(/Неясный фрагмент/)).toBeTruthy();
+  expect(screen.getByText(/Проверь карточку или формулу/)).toBeTruthy();
   await userEvent.clear(front);
   await userEvent.type(front, 'Окно');
   await userEvent.clear(back);

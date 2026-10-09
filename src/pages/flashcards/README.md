@@ -96,3 +96,9 @@ Backend выбирает `pair` / `definition` / `qa`; `question` и `answer` о
 Крупные иллюстрации применяются для загрузки фото, текста, ручного создания, генерации и результата. Системные кнопки используют прежние плоские SVG. Учебные стороны карточки содержат текст, без декоративного ростка и фоновых дуг; физический переворот, свайпы и микрокнопки сохранены. Кнопка создания в библиотеке — круглый «+» слева внизу. Все PNG сохраняют прозрачность и пропорции.
 
 Девять исходных PNG имели обрезанные края или фрагменты соседних иконок. Они восстановлены через imagegen 09.10.2026: flashcards-leaf, camera-photo, document-aa, pencil, sparkles, folder-cards, trophy, english-flashcards, classical-column. Прозрачный фон и квадратные пропорции сохранены; остальные 11 файлов не менялись.
+
+## Stable study cards and mathematics
+
+The flip instruction is below the card. The rotor height is clamp(320px, 55svh, 436px), stable across faces and sets at a given viewport. Long text scrolls inside; formulas have responsive sizing. Flip, swipe and grading remain unchanged.
+
+CardText safely renders plain text and inline LaTeX using native MathML, without HTML injection or new dependencies. Common powers, subscripts, fractions, roots and Greek symbols are supported; unknown commands remain visible with a review warning. The existing editor provides a math preview and editable text fields. Knowledge metadata stays hidden from the student.

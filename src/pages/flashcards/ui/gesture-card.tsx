@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { dragPose, MOTION, swipeVerdict } from '../model/motion';
 import type { MotionPhase } from '../model/motion';
+import { CardText } from './card-text';
 import styles from './flashcards.module.css';
 
 type Props = {
@@ -256,8 +257,15 @@ export function GestureCard({ cardId, token, number, question, answer, disabled,
         className={`${styles.studyCard} ${styles.cardFace} ${back ? styles.backFace : ''}`}
         aria-hidden={back !== flipped}
       >
-        <h2>{text}</h2>
-        <small>Нажми, чтобы перевернуть</small>
+        <div
+          className={`${styles.cardContent} ${text.length > 180 ? styles.longCardText : ''} ${
+            text.includes('\\(') ? styles.mathCardText : ''
+          }`}
+        >
+          <h2>
+            <CardText text={text} />
+          </h2>
+        </div>
       </div>
     );
   }
@@ -309,7 +317,7 @@ export function GestureCard({ cardId, token, number, question, answer, disabled,
         </div>
       </div>
       <div className={styles.studyHint}>
-        <p>{flipped ? 'Смахни влево, если не знаешь, вправо — если знаешь' : 'Переверни карточку и проверь себя'}</p>
+        <p>{flipped ? 'Смахни влево, если не знаешь, вправо — если знаешь' : 'Нажми, чтобы перевернуть'}</p>
       </div>
       <div className={styles.gradeActions} data-grade-actions>
         <button aria-label="Не знаю" disabled={blocked} onClick={() => void commit('unknown')}>

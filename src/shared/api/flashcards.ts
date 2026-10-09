@@ -1,4 +1,18 @@
 export type CardSemantics = {
+  knowledgeType?:
+    | 'vocabulary_pair'
+    | 'fact_pair'
+    | 'definition'
+    | 'formula_identity'
+    | 'formula_relation'
+    | 'rule'
+    | 'historical_fact'
+    | 'sequence_step'
+    | 'diagram_label'
+    | 'application'
+    | '';
+  direction?: 'forward' | 'reverse' | 'application' | '';
+  sourceUnitId?: string;
   type?: 'pair' | 'definition' | 'qa';
   frontLanguage?: string;
   backLanguage?: string;

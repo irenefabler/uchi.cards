@@ -134,3 +134,9 @@ describe('native motion sequencing', () => {
     expect(onGrade).toHaveBeenCalledOnce();
   });
 });
+
+it('keeps the flip instruction below both faces', () => {
+  render(<GestureCard {...props} onGrade={vi.fn()} />);
+  expect(card().textContent).not.toContain('Нажми, чтобы перевернуть');
+  expect(screen.getByText('Нажми, чтобы перевернуть').closest('[data-card-id]')).toBeNull();
+});

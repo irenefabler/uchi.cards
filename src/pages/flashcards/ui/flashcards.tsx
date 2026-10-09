@@ -23,6 +23,7 @@ import closeAsset from './assets/6-6351-imgX.svg';
 import checkAsset from './assets/6-6395-imgCheck.svg';
 import restartAsset from './assets/6-6395-imgRotateCcw.svg';
 import adviceAsset from './assets/6-6395-imgSparkles.svg';
+import { CardText } from './card-text';
 import { CoverIcon, Illustration, coverOptions } from './cover-icon';
 import styles from './flashcards.module.css';
 import { GestureCard } from './gesture-card';
@@ -614,7 +615,9 @@ function Editor({ initial }: { initial: Deck }) {
     setSaved('');
     setDraft((prev) => ({
       ...prev,
-      cards: prev.cards.map((card, i) => (i === index ? { ...card, [key]: value, needsReview: false } : card))
+      cards: prev.cards.map((card, i) =>
+        i === index ? { ...card, [key]: value, needsReview: card.knowledgeType?.startsWith('formula_') || false } : card
+      )
     }));
   }
   async function save(isDraft: boolean) {
@@ -701,7 +704,7 @@ function Editor({ initial }: { initial: Deck }) {
               </button>
             </div>
             {card.needsReview && (
-              <Notice error>Неясный фрагмент. Исправьте карточку по исходнику; перевод не угадывался.</Notice>
+              <Notice error>Проверь карточку или формулу по исходнику: не все элементы удалось подтвердить.</Notice>
             )}
             <label>
               {card.type && card.type !== 'qa' ? 'Передняя сторона' : 'Вопрос'}
@@ -729,6 +732,13 @@ function Editor({ initial }: { initial: Deck }) {
             </label>
             {card.question.trim() && duplicates.indexOf(duplicates[index]) !== index && (
               <Notice error>Такая карточка уже есть.</Notice>
+            )}
+            {(card.question.includes('\\(') || card.answer.includes('\\(')) && (
+              <div className={styles.mathPreview} aria-label={`Предпросмотр карточки ${index + 1}`}>
+                <CardText text={card.question} />
+                <hr />
+                <CardText text={card.answer} />
+              </div>
             )}
             {!card.answer.trim() && <small>Добавьте ответ перед сохранением набора.</small>}
           </section>
@@ -857,14 +867,16 @@ export function DeckPage() {
           <details key={card.id} className={`${styles.panel} ${styles.previewCard}`}>
             <summary>
               <span>
-                {card.question}
+                <CardText text={card.question} />
                 <small>Нажми, чтобы увидеть ответ</small>
               </span>
               <span className={styles.chevron}>
                 <Icon name="chevron" />
               </span>
             </summary>
-            <p>{card.answer}</p>
+            <p>
+              <CardText text={card.answer} />
+            </p>
             <small>
               {card.knowledgeStatus === 'known'
                 ? 'Знаю'
