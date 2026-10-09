@@ -4,8 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router';
 import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
-import { Environment } from 'src/shared/model/environment';
-import { demoCards } from '../model/demo';
 import { gesture, validCards } from '../model/study';
 import styles from './flashcards.module.css';
 
@@ -195,7 +193,28 @@ export function SourcePage() {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [photo]);
-  const demo = Environment.demoGeneration;
+  const [recognizing, setRecognizing] = useState(false);
+  const recognitionRequest = useRef(0);
+  useEffect(
+    () => () => {
+      recognitionRequest.current += 1;
+    },
+    []
+  );
+  async function recognize(file: File) {
+    const request = ++recognitionRequest.current;
+    setText('');
+    setError('');
+    setRecognizing(true);
+    try {
+      const result = await flashcardsApi.recognize(file);
+      if (request === recognitionRequest.current) setText(result.text);
+    } catch (err) {
+      if (request === recognitionRequest.current) setError(message(err));
+    } finally {
+      if (request === recognitionRequest.current) setRecognizing(false);
+    }
+  }
   return (
     <Shell title="Новый набор" back="/">
       <p className={styles.subtitle}>Выберите, с чего начнём.</p>
@@ -209,6 +228,7 @@ export function SourcePage() {
         ).map(([value, label]) => (
           <button
             key={value}
+            disabled={recognizing}
             aria-pressed={mode === value}
             className={mode === value ? styles.selected : ''}
             onClick={() => {
@@ -246,13 +266,22 @@ export function SourcePage() {
                 return;
               }
               setPhoto(file);
-              setError('');
+              void recognize(file);
             }}
           />
           {photo && (
             <>
               <p>{photo.name}</p>
-              <button className={styles.textButton} onClick={() => setPhoto(undefined)}>
+              <button
+                className={styles.textButton}
+                onClick={() => {
+                  recognitionRequest.current += 1;
+                  setPhoto(undefined);
+                  setText('');
+                  setRecognizing(false);
+                  setError('');
+                }}
+              >
                 Убрать фото
               </button>
             </>
@@ -260,10 +289,17 @@ export function SourcePage() {
           <small>Одна страница · JPG или PNG · до 10 МБ</small>
         </section>
       )}
-      {mode === 'text' && (
+      {mode === 'photo' && recognizing && <Notice>Распознаём страницу…</Notice>}
+      {mode === 'photo' && photo && error && !recognizing && (
+        <button className={styles.secondary} onClick={() => void recognize(photo)}>
+          Повторить распознавание
+        </button>
+      )}
+      {(mode === 'text' || (mode === 'photo' && text.trim())) && (
         <label className={styles.panel}>
-          Текст учебника
+          {mode === 'photo' ? 'Распознанный текст' : 'Текст учебника'}
           <textarea
+            aria-label={mode === 'photo' ? 'Распознанный текст' : 'Текст учебника'}
             value={text}
             maxLength={20000}
             rows={9}
@@ -284,19 +320,17 @@ export function SourcePage() {
         <Notice>
           {mode === 'text'
             ? 'Создадим вопросы и ответы по вашему тексту. Перед сохранением их можно проверить и изменить.'
-            : demo
-            ? 'Демо-режим: фото не анализируется и никуда не отправляется. Вы увидите 3 тестовые карточки.'
-            : 'Распознавание фото пока не подключено. Вставьте текст или создайте набор вручную.'}
+            : 'После выбора фото автоматически прочитаем страницу и создадим карточки по её тексту.'}
         </Notice>
       )}
       {error && <Notice error>{error}</Notice>}
       <button
         className={styles.primary}
-        disabled={mode === 'photo' ? !demo || !photo : mode === 'text' && !text.trim()}
+        disabled={mode !== 'manual' && (recognizing || !text.trim())}
         onClick={() => {
           sessionStorage.setItem(
             sourceKey,
-            JSON.stringify({ sourceType: mode, text: mode === 'text' ? text : '', filename: photo?.name || '' })
+            JSON.stringify({ sourceType: mode, text: mode !== 'manual' ? text : '', filename: photo?.name || '' })
           );
           nav('/new/settings');
         }}
@@ -318,10 +352,8 @@ export function SettingsPage() {
     setBusy(true);
     setError('');
     try {
-      if (source.sourceType === 'photo' && !Environment.demoGeneration)
-        throw new Error('Генерация пока не подключена.');
-      const generated = source.sourceType === 'text' ? await flashcardsApi.generate(source.text, count) : null;
-      const cards = generated ? generated.cards : source.sourceType === 'manual' ? [emptyCard()] : demoCards;
+      const generated = source.sourceType !== 'manual' ? await flashcardsApi.generate(source.text, count) : null;
+      const cards = generated ? generated.cards : [emptyCard()];
       const deck = await flashcardsApi.save({
         title: title.trim(),
         sourceType: source.sourceType,
@@ -368,22 +400,12 @@ export function SettingsPage() {
               ))}
             </div>
           </section>
-          <Notice>
-            {source.sourceType === 'photo'
-              ? `Демо-генерация: покажем 3 тестовые карточки вместо ${count}. Фото не анализируется.`
-              : 'Создадим карточки по тексту. Если фактов мало, карточек может быть меньше.'}
-          </Notice>
+          <Notice>Создадим карточки по тексту. Если фактов мало, карточек может быть меньше.</Notice>
         </>
       )}
       {error && <Notice error>{error}</Notice>}
       <button className={styles.primary} disabled={!title.trim() || busy} onClick={() => void create()}>
-        {busy
-          ? 'Создаём черновик…'
-          : source.sourceType === 'manual'
-          ? 'Добавить карточки'
-          : source.sourceType === 'photo'
-          ? 'Открыть демо-черновик'
-          : 'Создать карточки'}{' '}
+        {busy ? 'Создаём черновик…' : source.sourceType === 'manual' ? 'Добавить карточки' : 'Создать карточки'}{' '}
         <span>→</span>
       </button>
     </Shell>
@@ -488,10 +510,7 @@ function Editor({ initial }: { initial: Deck }) {
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
         />
       </label>
-      {draft.sourceType === 'photo' && (
-        <Notice>Тестовые карточки демо-режима. Исходное фото не анализировалось.</Notice>
-      )}
-      {draft.sourceType === 'text' && (
+      {draft.sourceType !== 'manual' && (
         <Notice>Карточки созданы по тексту. Проверьте вопросы и ответы перед сохранением.</Notice>
       )}
       <div className={styles.editList}>

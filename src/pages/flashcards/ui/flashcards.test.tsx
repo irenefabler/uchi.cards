@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +18,8 @@ vi.mock('src/shared/api/flashcards', async (importOriginal) => {
       grade: vi.fn(),
       get: vi.fn(),
       save: vi.fn(),
-      generate: vi.fn()
+      generate: vi.fn(),
+      recognize: vi.fn()
     }
   };
 });
@@ -62,6 +63,7 @@ afterEach(() => {
 beforeEach(() => {
   vi.mocked(flashcardsApi.session).mockResolvedValue(structuredClone(session));
   vi.mocked(flashcardsApi.grade).mockReset();
+  vi.mocked(flashcardsApi.recognize).mockReset();
 });
 
 describe('study interaction', () => {
@@ -249,11 +251,8 @@ it('pauses without marking the session finished', async () => {
   expect(flashcardsApi.finish).not.toHaveBeenCalled();
 });
 
-it('generates real text cards and saves only the validated model result', async () => {
-  sessionStorage.setItem(
-    'uchi-cards-source-v1',
-    JSON.stringify({ sourceType: 'text', text: 'Материал урока', filename: '' })
-  );
+it.each(['text', 'photo'] as const)('generates %s cards from the actual source text', async (sourceType) => {
+  sessionStorage.setItem('uchi-cards-source-v1', JSON.stringify({ sourceType, text: 'Материал урока', filename: '' }));
   vi.mocked(flashcardsApi.generate).mockResolvedValue({
     cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }],
     warnings: [],
@@ -267,7 +266,7 @@ it('generates real text cards and saves only the validated model result', async 
   await screen.findByText('Новый черновик');
   expect(flashcardsApi.save).toHaveBeenCalledWith(
     expect.objectContaining({
-      sourceType: 'text',
+      sourceType,
       cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }]
     })
   );
@@ -285,4 +284,61 @@ it('keeps source text on model failure and does not save a demo instead', async 
   await screen.findByText('Не удалось создать карточки');
   expect(flashcardsApi.save).not.toHaveBeenCalled();
   expect(sessionStorage.getItem('uchi-cards-source-v1')).toContain('Материал урока');
+});
+
+function stubPhotoPreview() {
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = vi.fn(() => 'blob:photo-preview');
+      static revokeObjectURL = vi.fn();
+    }
+  );
+}
+it('automatically recognizes a selected photo without demo mode', async () => {
+  stubPhotoPreview();
+  vi.mocked(flashcardsApi.recognize).mockResolvedValue({ text: 'Растения выделяют кислород.' });
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: 'Фото' }));
+  const file = new File(['image'], 'page.png', { type: 'image/png' });
+  fireEvent.change(screen.getByLabelText('Выбрать фото'), { target: { files: [file] } });
+  await screen.findByLabelText('Распознанный текст');
+  expect(flashcardsApi.recognize).toHaveBeenCalledWith(file);
+  expect((screen.getByLabelText('Распознанный текст') as HTMLTextAreaElement).value).toBe(
+    'Растения выделяют кислород.'
+  );
+  expect((screen.getByRole('button', { name: /Продолжить/ }) as HTMLButtonElement).disabled).toBe(false);
+});
+it('does not enable continuation or invent text when photo recognition fails', async () => {
+  stubPhotoPreview();
+  vi.mocked(flashcardsApi.recognize).mockRejectedValue(new ApiError(502, 'Фото не прочитано'));
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: 'Фото' }));
+  fireEvent.change(screen.getByLabelText('Выбрать фото'), {
+    target: { files: [new File(['image'], 'page.png', { type: 'image/png' })] }
+  });
+  await screen.findByText('Фото не прочитано');
+  expect((screen.getByRole('button', { name: /Продолжить/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole('button', { name: 'Повторить распознавание' })).toBeTruthy();
+});
+it('ignores recognition results after the photo has been removed', async () => {
+  stubPhotoPreview();
+  let resolve!: (value: { text: string }) => void;
+  vi.mocked(flashcardsApi.recognize).mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    })
+  );
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: 'Фото' }));
+  fireEvent.change(screen.getByLabelText('Выбрать фото'), {
+    target: { files: [new File(['image'], 'page.png', { type: 'image/png' })] }
+  });
+  await screen.findByText('Распознаём страницу…');
+  await userEvent.click(screen.getByRole('button', { name: 'Убрать фото' }));
+  await act(async () => {
+    resolve({ text: 'Устаревший результат' });
+  });
+  await waitFor(() => expect(screen.queryByLabelText('Распознанный текст')).toBeNull());
+  expect((screen.getByRole('button', { name: /Продолжить/ }) as HTMLButtonElement).disabled).toBe(true);
 });

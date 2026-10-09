@@ -49,8 +49,8 @@ async function request<T>(path: string, method = 'GET', body?: unknown, timeout 
   const response = await fetch(`/api/v1${path}`, {
     method,
     credentials: 'same-origin',
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
     signal: AbortSignal.timeout(timeout)
   });
   if (!response.ok) {
@@ -66,6 +66,11 @@ async function request<T>(path: string, method = 'GET', body?: unknown, timeout 
 }
 export type Generation = { cards: DeckInput['cards']; warnings: string[]; demo: boolean };
 export const flashcardsApi = {
+  recognize: (photo: File) => {
+    const form = new FormData();
+    form.append('photo', photo);
+    return request<{ text: string }>('/recognitions', 'POST', form, 85000);
+  },
   generate: (text: string, count: number) =>
     request<Generation>('/generations', 'POST', { sourceType: 'text', text, count }, 85000),
   list: (page = 1, draft = false) => request<Deck[]>(`/decks?page=${page}&draft=${draft}`),
