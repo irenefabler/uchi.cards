@@ -9,11 +9,23 @@ export type Deck = {
   knowledgePercent: number | null;
   knownCount: number;
   reviewedCount: number;
+  activeSessionId?: number | null;
 };
 export type DeckInput = Pick<Deck, 'title' | 'sourceType' | 'revision' | 'isDraft'> & {
   cards: Pick<Card, 'id' | 'question' | 'answer'>[];
 };
 export type StudySession = {
+  nextCardId: number;
+  presentationIndex: number;
+  learningCards: Record<
+    string,
+    {
+      knownStreak: number;
+      failedAttempts: number;
+      status: 'pending' | 'mastered' | 'needs_practice';
+      lastVerdict: 'unknown' | 'known' | 'not_known';
+    }
+  >;
   id: number;
   deckId: number;
   title: string;
@@ -24,7 +36,15 @@ export type StudySession = {
   finishedAt: string | null;
   knowledgePercent: number | null;
 };
-export type Grade = { cardId: number; status: 'known' | 'unknown'; eventId: string };
+export type Grade = { presentationIndex: number; cardId: number; status: 'known' | 'unknown'; eventId: string };
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method,
@@ -35,7 +55,8 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
   });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(
+    throw new ApiError(
+      response.status,
       response.status === 401
         ? 'Войдите в аккаунт, чтобы открыть ваши наборы.'
         : data?.errors?.join('. ') || 'Сервер недоступен. Попробуйте ещё раз.'

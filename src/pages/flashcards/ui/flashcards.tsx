@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, PointerEvent as ReactPointerEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router';
-import { flashcardsApi, deckKeys } from 'src/shared/api/flashcards';
+import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
 import { Environment } from 'src/shared/model/environment';
 import { demoCards } from '../model/demo';
@@ -72,7 +72,7 @@ function Notice({ children, error = false }: { children: ReactNode; error?: bool
     </p>
   );
 }
-function Progress({ value, label = 'Уровень знания' }: { value: number | null; label?: string }) {
+function Progress({ value, label = 'Освоено в последней тренировке' }: { value: number | null; label?: string }) {
   return (
     <div className={styles.progress}>
       <div>
@@ -556,6 +556,10 @@ export function DeckPage() {
   const [showAll, setShowAll] = useState(false);
   async function start() {
     if (!query.data) return;
+    if (query.data.activeSessionId) {
+      nav(`/sessions/${query.data.activeSessionId}`);
+      return;
+    }
     setBusy(true);
     try {
       const session = await flashcardsApi.start(query.data.id);
@@ -608,7 +612,7 @@ export function DeckPage() {
       <section className={styles.panel}>
         <Progress value={deck.knowledgePercent} />
         <p className={styles.stat}>
-          {deck.knownCount} из {deck.cards.length} знаю!
+          {deck.knownCount} из {deck.cards.length} освоено
         </p>
       </section>
       <button
@@ -616,7 +620,7 @@ export function DeckPage() {
         disabled={busy || deck.isDraft || !deck.cards.length}
         onClick={() => void start()}
       >
-        ▷ Начать тренировку
+        ▷ {deck.activeSessionId ? 'Продолжить тренировку' : 'Начать тренировку'}
       </button>
       <div className={styles.row}>
         <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
@@ -665,27 +669,36 @@ export function StudyPage() {
   const pointer = useRef<{ id: number; x: number; y: number; width: number } | null>(null);
   const pending = useRef<Grade | null>(null);
   const session = query.data;
-  const card = session?.cards.find((value) => !session.answers[String(value.id)]);
-  const answered = session ? Object.keys(session.answers).length : 0;
+  const card = session?.cards.find((value) => value.id === session.nextCardId);
+  const cardNumber = session && card ? session.cards.findIndex((value) => value.id === card.id) + 1 : 0;
+  const mastered = session?.knownCount || 0;
   async function grade(status: 'known' | 'unknown') {
     if (!session || !card || lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
-    pending.current ||= { cardId: card.id, status, eventId: crypto.randomUUID() };
+    pending.current ||= {
+      cardId: card.id,
+      status,
+      eventId: crypto.randomUUID(),
+      presentationIndex: session.presentationIndex
+    };
     try {
       const result = await flashcardsApi.grade(id, pending.current);
       client.setQueryData(deckKeys.session(id), result);
       pending.current = null;
       setFlipped(false);
-      if (Object.keys(result.answers).length === result.cards.length) {
-        const final = await flashcardsApi.finish(id);
-        client.setQueryData(deckKeys.session(id), final);
+      if (result.finishedAt) {
         await client.invalidateQueries({ queryKey: deckKeys.all });
         nav(`/sessions/${id}/results`, { replace: true });
       }
     } catch (err) {
       setError(message(err));
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        pending.current = null;
+        setFlipped(false);
+        await query.refetch();
+      }
     } finally {
       setDx(0);
       setBusy(false);
@@ -708,6 +721,11 @@ export function StudyPage() {
       setBusy(false);
     }
   }
+  async function pause() {
+    if (lock.current) return;
+    await client.invalidateQueries({ queryKey: deckKeys.all });
+    nav(`/decks/${session?.deckId}`);
+  }
   function release(event: ReactPointerEvent<HTMLDivElement>) {
     const start = pointer.current;
     pointer.current = null;
@@ -728,7 +746,10 @@ export function StudyPage() {
     );
   if (query.isError)
     return (
-      <Shell back="/" study>
+      <Shell study>
+        <Link className={styles.textButton} to="/">
+          ← К наборам
+        </Link>
         <Failure error={query.error} retry={() => void query.refetch()} />
       </Shell>
     );
@@ -740,16 +761,19 @@ export function StudyPage() {
         </button>
         <strong>{session?.title}</strong>
         <span>
-          {Math.min(answered + 1, session?.cards.length || 0)} из {session?.cards.length}
+          {mastered} из {session?.cards.length} освоено
         </span>
       </div>
-      <Progress value={session ? Math.round((answered / session.cards.length) * 100) : 0} label="Прохождение занятия" />
+      <Progress
+        value={session ? Math.round((mastered / session.cards.length) * 100) : 0}
+        label="Освоено в этой тренировке"
+      />
       {card && (
         <>
           <div
             role="button"
             tabIndex={0}
-            aria-label={`Карточка ${answered + 1}. ${flipped ? 'Ответ' : 'Вопрос'}: ${
+            aria-label={`Карточка ${cardNumber}. ${flipped ? 'Ответ' : 'Вопрос'}: ${
               flipped ? card.answer : card.question
             }`}
             aria-disabled={busy || !!pending.current}
@@ -835,7 +859,7 @@ export function StudyPage() {
           Показать результаты
         </button>
       )}
-      {exit && <ExitDialog busy={busy} finish={() => void finish()} close={() => setExit(false)} />}
+      {exit && <ExitDialog busy={busy} finish={() => void pause()} close={() => setExit(false)} />}
     </Shell>
   );
 }
@@ -875,10 +899,10 @@ function ExitDialog({ busy, finish, close }: { busy: boolean; finish: () => void
           }
         }}
       >
-        <h2 id="exit-title">Закончить тренировку?</h2>
-        <p>Сохранённые ответы останутся. Можно пройти набор снова.</p>
+        <h2 id="exit-title">Прерваться?</h2>
+        <p>Сохраним место в тренировке. Вы сможете продолжить позже. Результат прошлого занятия останется прежним.</p>
         <button className={styles.primary} disabled={busy} onClick={finish}>
-          Завершить и посмотреть итог
+          Выйти и продолжить позже
         </button>
         <button className={styles.secondary} disabled={busy} onClick={close}>
           Продолжить
@@ -926,25 +950,25 @@ export function ResultsPage() {
       </div>
       <p className={styles.subtitle}>Каждый ответ помогает понять, что повторить.</p>
       <p>
-        Пройдено {session.knownCount + session.unknownCount} из {session.cards.length}
+        {session.knownCount} из {session.cards.length} освоено
       </p>
       <section className={styles.panel}>
-        <p>Твои знания</p>
+        <p>Освоено в этой тренировке</p>
         <strong className={styles.bigPercent}>
           {session.knowledgePercent === null ? '—' : `${session.knowledgePercent}%`}
         </strong>
-        <Progress value={session.knowledgePercent} />
+        <Progress value={session.knowledgePercent} label="Освоено в этой тренировке" />
       </section>
       <div className={styles.resultStats}>
         <div>
           <span>✓</span>
           <strong>{session.knownCount}</strong>
-          <small>Знаю</small>
+          <small>Освоено</small>
         </div>
         <div>
           <span>×</span>
           <strong>{session.unknownCount}</strong>
-          <small>Не знаю</small>
+          <small>Нужно повторить</small>
         </div>
       </div>
       {error && <Notice error>{error}</Notice>}
