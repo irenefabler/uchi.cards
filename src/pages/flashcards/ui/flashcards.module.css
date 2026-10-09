@@ -1326,3 +1326,7 @@
 .subtitle {
   overflow-wrap: anywhere;
 }
+
+.resumeAction { margin-bottom: 24px; }
+.swipeStamp { border: none; padding: 0; background: transparent; width: 68px; height: 63px; }
+.swipeStamp img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; }

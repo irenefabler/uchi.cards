@@ -204,7 +204,7 @@ export function LibraryPage() {
         <>
           <p className={styles.subtitle}>{header.subtitle}</p>
           {header.sessionId && (
-            <Link className={styles.secondary} to={`/sessions/${header.sessionId}`}>
+            <Link className={`${styles.secondary} ${styles.resumeAction}`} to={`/sessions/${header.sessionId}`}>
               Продолжить
             </Link>
           )}
@@ -1039,7 +1039,6 @@ export function StudyPage() {
       <span className={styles.srOnly} role="status" aria-live="polite">
         Освоено {mastered} из {session?.cards.length}
       </span>
-      {busy && <Notice>Сохраняем ответ…</Notice>}
       {error && (
         <>
           <Notice error>{error}</Notice>

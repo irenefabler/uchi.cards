@@ -94,7 +94,8 @@ describe('study interaction', () => {
       fireEvent.keyDown(card, { key: 'Enter' });
       await waitFor(() => expect(card.getAttribute('aria-disabled')).toBe('false'));
     }
-    expect(card.querySelector('img')).toBeNull();
+    expect(card.querySelectorAll('img')).toHaveLength(2);
+    expect(Array.from(card.querySelectorAll('img')).every((image) => image.draggable === false)).toBe(true);
     expect(fireEvent.dragStart(card)).toBe(false);
     fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 200, clientY: 200 });
     fireEvent.pointerMove(card, { pointerId: 1, clientX: 200 + distance, clientY: 200 });
@@ -165,6 +166,7 @@ describe('study interaction', () => {
     expect(screen.getByRole('button', { name: 'Знаю' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: 'Не знаю' }).hasAttribute('disabled')).toBe(true);
     await waitFor(() => expect(flashcardsApi.grade).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Сохраняем ответ…')).toBeNull();
     resolve({
       ...session,
       nextCardId: 11,

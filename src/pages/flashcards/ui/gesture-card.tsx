@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { dragPose, MOTION, swipeVerdict } from '../model/motion';
 import type { MotionPhase } from '../model/motion';
+import swipeNot from './assets/swipe-not.svg';
+import swipeOk from './assets/swipe-ok.svg';
 import { CardText } from './card-text';
 import styles from './flashcards.module.css';
 
@@ -309,10 +311,10 @@ export function GestureCard({ cardId, token, number, question, answer, disabled,
             </div>
           </div>
           <span ref={positive} className={`${styles.swipeStamp} ${styles.knownStamp}`} aria-hidden="true">
-            Знаю
+            <img src={swipeOk} alt="" draggable={false} />
           </span>
           <span ref={negative} className={`${styles.swipeStamp} ${styles.unknownStamp}`} aria-hidden="true">
-            Не знаю
+            <img src={swipeNot} alt="" draggable={false} />
           </span>
         </div>
       </div>
