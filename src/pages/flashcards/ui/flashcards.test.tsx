@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flashcardsApi, ApiError } from 'src/shared/api/flashcards';
 import type { StudySession } from 'src/shared/api/flashcards';
-import { EditorPage, SourcePage, StudyPage, SettingsPage } from './flashcards';
+import { EditorPage, SourcePage, StudyPage, NewEditorPage, LibraryPage } from './flashcards';
 
 vi.mock('src/shared/api/flashcards', async (importOriginal) => {
   const original = await importOriginal<typeof import('src/shared/api/flashcards')>();
@@ -14,6 +14,8 @@ vi.mock('src/shared/api/flashcards', async (importOriginal) => {
     flashcardsApi: {
       ...original.flashcardsApi,
       session: vi.fn(),
+      list: vi.fn(),
+      home: vi.fn(),
       finish: vi.fn(),
       grade: vi.fn(),
       get: vi.fn(),
@@ -48,6 +50,7 @@ function mount(element: React.ReactNode, path = '/sessions/1', route = '/session
         <Routes>
           <Route path={route} element={element} />
           <Route path="/decks/:id" element={<p>Место сохранено</p>} />
+          {route !== '/new/review' && <Route path="/new/review" element={<p>Проверка нового набора</p>} />}
           <Route path="/decks/:id/edit" element={<p>Новый черновик</p>} />
         </Routes>
       </MemoryRouter>
@@ -308,41 +311,105 @@ it('pauses without marking the session finished', async () => {
   expect(flashcardsApi.finish).not.toHaveBeenCalled();
 });
 
-it.each(['text', 'photo'] as const)('generates %s cards from the actual source text', async (sourceType) => {
-  sessionStorage.setItem('uchi-cards-source-v1', JSON.stringify({ sourceType, text: 'Материал урока', filename: '' }));
-  vi.mocked(flashcardsApi.generate).mockResolvedValue({
-    cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }],
-    warnings: [],
-    demo: false
-  });
-  vi.mocked(flashcardsApi.save).mockResolvedValue({ id: 7 } as never);
-  mount(<SettingsPage />, '/new/settings', '/new/settings');
-  await userEvent.type(screen.getByLabelText('Название'), 'Урок');
-  await userEvent.click(screen.getByRole('button', { name: /Создать карточки/ }));
-  await waitFor(() =>
-    expect(flashcardsApi.generate).toHaveBeenCalledWith('Материал урока', 20, sourceType === 'photo' ? 'ocr' : 'text')
-  );
-  await screen.findByText('Новый черновик');
-  expect(flashcardsApi.save).toHaveBeenCalledWith(
-    expect.objectContaining({
-      sourceType,
-      cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }]
-    })
-  );
-});
-it('keeps source text on model failure and does not save a demo instead', async () => {
+it.each(['text', 'photo'] as const)(
+  'generates %s directly into a local editor without saving first',
+  async (sourceType) => {
+    sessionStorage.setItem(
+      'uchi-cards-source-v1',
+      JSON.stringify({ sourceType, text: 'Материал урока', filename: '' })
+    );
+    vi.mocked(flashcardsApi.generate)
+      .mockClear()
+      .mockResolvedValue({
+        suggestedTitle: 'Тема урока',
+        coverIconId: 'plant-leaves',
+        cards: [{ id: 0, question: 'По материалу?', answer: 'Верный ответ' }],
+        warnings: [],
+        demo: false
+      });
+    vi.mocked(flashcardsApi.save).mockClear();
+    mount(<SourcePage />, '/new', '/new');
+    await userEvent.click(screen.getByRole('button', { name: /Продолжить/ }));
+    await waitFor(() =>
+      expect(flashcardsApi.generate).toHaveBeenCalledWith('Материал урока', 0, sourceType === 'photo' ? 'ocr' : 'text')
+    );
+    expect(flashcardsApi.save).not.toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').title).toBe('Тема урока');
+    expect(screen.queryByText('Настроим набор')).toBeNull();
+  }
+);
+it('keeps source on generation failure without saving', async () => {
   sessionStorage.setItem(
     'uchi-cards-source-v1',
     JSON.stringify({ sourceType: 'text', text: 'Материал урока', filename: '' })
   );
   vi.mocked(flashcardsApi.generate).mockRejectedValue(new ApiError(502, 'Не удалось создать карточки'));
   vi.mocked(flashcardsApi.save).mockClear();
-  mount(<SettingsPage />, '/new/settings', '/new/settings');
-  await userEvent.type(screen.getByLabelText('Название'), 'Урок');
-  await userEvent.click(screen.getByRole('button', { name: /Создать карточки/ }));
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: /Продолжить/ }));
   await screen.findByText('Не удалось создать карточки');
   expect(flashcardsApi.save).not.toHaveBeenCalled();
   expect(sessionStorage.getItem('uchi-cards-source-v1')).toContain('Материал урока');
+});
+it('opens a blank manual draft without AI or a server save', async () => {
+  vi.mocked(flashcardsApi.generate).mockClear();
+  vi.mocked(flashcardsApi.save).mockClear();
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: 'Вручную' }));
+  await waitFor(() => expect(sessionStorage.getItem('uchi-cards-editor-0')).not.toBeNull());
+  const draft = JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}');
+  expect(draft.title).toBe('');
+  expect(draft.cards).toEqual([{ id: 0, question: '', answer: '' }]);
+  expect(flashcardsApi.generate).not.toHaveBeenCalled();
+  expect(flashcardsApi.save).not.toHaveBeenCalled();
+});
+it('saves a new reviewed deck atomically and preserves the edited title', async () => {
+  sessionStorage.setItem(
+    'uchi-cards-editor-0',
+    JSON.stringify({
+      id: 0,
+      title: 'Название ИИ',
+      sourceType: 'text',
+      revision: 0,
+      isDraft: true,
+      cards: [{ id: 0, question: 'Пара', answer: 'Ответ' }]
+    })
+  );
+  vi.mocked(flashcardsApi.save).mockClear().mockResolvedValue({
+    id: 7,
+    title: 'Моё название',
+    sourceType: 'text',
+    revision: 1,
+    isDraft: false,
+    cards: session.cards,
+    knownCount: 0,
+    reviewedCount: 0,
+    knowledgePercent: null
+  });
+  mount(<NewEditorPage />, '/new/review', '/new/review');
+  fireEvent.change(screen.getByLabelText(/Название набора/), { target: { value: 'Моё название' } });
+  fireEvent.change(screen.getByLabelText('Вопрос'), { target: { value: 'Исправленная пара' } });
+  expect((screen.getByLabelText(/Название набора/) as HTMLInputElement).value).toBe('Моё название');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить набор' }));
+  await waitFor(() =>
+    expect(flashcardsApi.save).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Моё название', isDraft: false }),
+      undefined
+    )
+  );
+});
+it('restores the reviewed local draft without replacing its title or calling AI', async () => {
+  sessionStorage.setItem('uchi-cards-source-v1', JSON.stringify({ sourceType: 'text', text: 'Урок', filename: '' }));
+  sessionStorage.setItem('uchi-cards-draft-source', JSON.stringify({ sourceType: 'text', text: 'Урок' }));
+  sessionStorage.setItem(
+    'uchi-cards-editor-0',
+    JSON.stringify({ id: 0, title: 'Моё название', revision: 0, cards: [{ id: 0, question: 'Q', answer: 'A' }] })
+  );
+  vi.mocked(flashcardsApi.generate).mockClear();
+  mount(<SourcePage />, '/new', '/new');
+  await userEvent.click(screen.getByRole('button', { name: /Продолжить/ }));
+  expect(flashcardsApi.generate).not.toHaveBeenCalled();
+  expect(JSON.parse(sessionStorage.getItem('uchi-cards-editor-0') || '{}').title).toBe('Моё название');
 });
 
 function stubPhotoPreview() {
@@ -534,4 +601,105 @@ it('offers only thematic covers and saves a manual choice with the edited deck',
       1
     )
   );
+});
+
+it('holds the home header stable after load and advertises a verified resumable session', async () => {
+  vi.mocked(flashcardsApi.list).mockResolvedValue([
+    { id: 1, title: 'Урок', cards: [], knowledgePercent: null }
+  ] as never);
+  vi.mocked(flashcardsApi.home).mockResolvedValue({
+    deckCount: 1,
+    resumableSessionId: 7,
+    resumableDeckTitle: 'Очень длинный учебный набор',
+    masteredToday: 2,
+    completedToday: 1
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <LibraryPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  await screen.findByRole('heading', { name: 'Продолжим?' });
+  expect(screen.getByRole('link', { name: 'Продолжить' }).getAttribute('href')).toBe('/sessions/7');
+  await act(async () => {
+    client.setQueryData(['flashcards', 'home'], {
+      deckCount: 1,
+      resumableSessionId: null,
+      masteredToday: 9,
+      completedToday: 1
+    });
+  });
+  expect(screen.getByRole('heading', { name: 'Продолжим?' })).toBeTruthy();
+});
+it('uses neutral copy when home metrics fail', async () => {
+  vi.mocked(flashcardsApi.list).mockResolvedValue([
+    { id: 1, title: 'Урок', cards: [], knowledgePercent: null }
+  ] as never);
+  vi.mocked(flashcardsApi.home).mockRejectedValue(new Error('Metrics unavailable'));
+  mount(<LibraryPage />, '/', '/');
+  await screen.findByRole('heading', { name: 'Что учим сегодня?' });
+  expect(screen.queryByRole('link', { name: 'Продолжить' })).toBeNull();
+  expect(screen.queryByText('Хорошая работа!')).toBeNull();
+});
+it('shows a skeleton until home data is ready', async () => {
+  vi.mocked(flashcardsApi.list).mockResolvedValue([]);
+  vi.mocked(flashcardsApi.home).mockReturnValue(new Promise(() => {}));
+  mount(<LibraryPage />, '/', '/');
+  expect(screen.getByRole('status', { name: 'Загружаем библиотеку' })).toBeTruthy();
+  expect(screen.queryByText('Хорошая работа!')).toBeNull();
+});
+it('rejects multiple photos at runtime', async () => {
+  stubPhotoPreview();
+  mount(<SourcePage />, '/new', '/new');
+  fireEvent.change(screen.getByLabelText('Выбрать фото'), {
+    target: {
+      files: [new File(['image'], 'a.png', { type: 'image/png' }), new File(['image'], 'b.png', { type: 'image/png' })]
+    }
+  });
+  await screen.findByText('Выберите одно JPG или PNG до 10 МБ.');
+  expect(flashcardsApi.recognize).not.toHaveBeenCalled();
+});
+it('reports empty OCR without generating fabricated cards', async () => {
+  stubPhotoPreview();
+  vi.mocked(flashcardsApi.recognize).mockResolvedValue({ text: '' });
+  mount(<SourcePage />, '/new', '/new');
+  fireEvent.change(screen.getByLabelText('Выбрать фото'), {
+    target: { files: [new File(['image'], 'a.png', { type: 'image/png' })] }
+  });
+  await screen.findByText('Не удалось прочитать текст. Выбери более чёткое фото.');
+  expect((screen.getByRole('button', { name: /Продолжить/ }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('rechecks cached resume data before showing the home title on navigation entry', async () => {
+  vi.mocked(flashcardsApi.list).mockResolvedValue([]);
+  let resolve!: (data: Awaited<ReturnType<typeof flashcardsApi.home>>) => void;
+  vi.mocked(flashcardsApi.home).mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    })
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(['flashcards', 'home'], {
+    deckCount: 1,
+    resumableSessionId: 7,
+    resumableDeckTitle: 'Old session',
+    masteredToday: 0,
+    completedToday: 0
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <LibraryPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  expect(screen.getByRole('status', { name: 'Загружаем библиотеку' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Продолжить' })).toBeNull();
+  await act(async () => {
+    resolve({ deckCount: 1, resumableSessionId: null, resumableDeckTitle: '', masteredToday: 2, completedToday: 1 });
+  });
+  await screen.findByRole('heading', { name: 'Хорошая работа!' });
 });

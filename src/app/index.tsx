@@ -1,9 +1,9 @@
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { BattlePage } from 'src/pages/example-battle-page';
 import {
   LibraryPage,
   SourcePage,
-  SettingsPage,
+  NewEditorPage,
   EditorPage,
   DeckPage,
   StudyPage,
@@ -21,7 +21,8 @@ export const App = () => {
         <Routes>
           <Route index element={<LibraryPage />} />
           <Route path="new" element={<SourcePage />} />
-          <Route path="new/settings" element={<SettingsPage />} />
+          <Route path="new/review" element={<NewEditorPage />} />
+          <Route path="new/settings" element={<Navigate to="/new" replace />} />
           <Route path="decks/:id/edit" element={<EditorPage />} />
           <Route path="decks/:id" element={<DeckPage />} />
           <Route path="sessions/:id" element={<StudyPage />} />

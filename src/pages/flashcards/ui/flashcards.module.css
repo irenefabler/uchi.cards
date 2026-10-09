@@ -775,9 +775,10 @@
 .previewCard summary::-webkit-details-marker {
   display: none;
 }
-.previewCard summary > span:nth-child(2) {
-  flex: 1;
-  min-width: 0;
+.previewCard summary > .chevron {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
 }
 .previewCard summary small {
   display: block;
@@ -1274,14 +1275,54 @@
 }
 
 /* Content never changes the card height between faces or queue presentations. */
-.flipRotor { height: clamp(320px, 55svh, 436px); grid-template-rows: minmax(0, 1fr); }
-.studyCard { height: 100%; min-height: 0; }
-.cardContent { width: 100%; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.longCardText h2 { font-size: 20px; line-height: 1.35; }
+.flipRotor {
+  height: clamp(320px, 55svh, 436px);
+  grid-template-rows: minmax(0, 1fr);
+}
+.studyCard {
+  height: 100%;
+  min-height: 0;
+}
+.cardContent {
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.longCardText h2 {
+  font-size: 20px;
+  line-height: 1.35;
+}
 
-.mathPreview { padding: 16px; border-radius: 12px; background: var(--field); overflow-x: auto; line-height: 1.6; }
-.cardContent math { font-family: math; font-size: 1em; }
-.cardContent h2 { white-space: pre-wrap; }
-.cardContent math { overflow-wrap: normal; }
+.mathPreview {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--field);
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.cardContent math {
+  font-family: math;
+  font-size: 1em;
+}
+.cardContent h2 {
+  white-space: pre-wrap;
+}
+.cardContent math {
+  overflow-wrap: normal;
+}
 
-.mathCardText h2 { font-size: clamp(18px, 5.2vw, 28px); }
+.mathCardText h2 {
+  font-size: clamp(18px, 5.2vw, 28px);
+}
+
+.headerSkeleton {
+  height: 98px;
+  margin: 24px 0;
+  border-radius: 16px;
+  background: var(--field);
+}
+.subtitle {
+  overflow-wrap: anywhere;
+}

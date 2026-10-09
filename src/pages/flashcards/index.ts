@@ -1,1 +1,1 @@
-export { LibraryPage, SourcePage, SettingsPage, EditorPage, DeckPage, StudyPage, ResultsPage } from './ui/flashcards';
+export { LibraryPage, SourcePage, NewEditorPage, EditorPage, DeckPage, StudyPage, ResultsPage } from './ui/flashcards';

@@ -95,8 +95,25 @@ async function request<T>(path: string, method = 'GET', body?: unknown, timeout 
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
-export type Generation = { cards: DeckInput['cards']; warnings: string[]; demo: boolean };
+export type HomeSummary = {
+  deckCount: number;
+  resumableSessionId: number | null;
+  resumableDeckTitle: string;
+  masteredToday: number;
+  completedToday: number;
+};
+export type Generation = {
+  suggestedTitle?: string;
+  coverIconId?: string;
+  cards: DeckInput['cards'];
+  warnings: string[];
+  demo: boolean;
+};
 export const flashcardsApi = {
+  home: () =>
+    request<HomeSummary>(
+      `/home?timezone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}`
+    ),
   recognize: (photo: File) => {
     const form = new FormData();
     form.append('photo', photo);
@@ -115,6 +132,7 @@ export const flashcardsApi = {
 };
 export const deckKeys = {
   all: ['flashcards'] as const,
+  home: () => ['flashcards', 'home'] as const,
   list: (page: number, draft = false) => ['flashcards', 'list', page, draft] as const,
   deck: (id: number) => ['flashcards', 'deck', id] as const,
   session: (id: number) => ['flashcards', 'session', id] as const

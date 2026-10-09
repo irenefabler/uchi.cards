@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useLocation, Link } from 'react-router';
 import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
+import { resolveHomeHeader } from '../model/home-header';
 import { validCards } from '../model/study';
 import chevronAsset from './assets/6-6045-imgChevronRight.svg';
 import plusAsset from './assets/6-6045-imgPlus.svg';
@@ -176,9 +177,41 @@ export function LibraryPage() {
   const [page, setPage] = useState(1);
   const query = useQuery({ queryKey: deckKeys.list(page), queryFn: () => flashcardsApi.list(page) });
   const drafts = useQuery({ queryKey: deckKeys.list(1, true), queryFn: () => flashcardsApi.list(1, true) });
+  const home = useQuery({
+    queryKey: deckKeys.home(),
+    queryFn: flashcardsApi.home,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    retry: false
+  });
+  const headerSnapshot = useRef<ReturnType<typeof resolveHomeHeader> | null>(null);
+  if (!headerSnapshot.current && !home.isPending && !home.isFetching && !query.isPending) {
+    headerSnapshot.current =
+      !home.isError && home.data
+        ? resolveHomeHeader(home.data)
+        : resolveHomeHeader({
+            deckCount: 1,
+            resumableSessionId: null,
+            resumableDeckTitle: '',
+            masteredToday: 0,
+            completedToday: 0
+          });
+  }
+  const header = headerSnapshot.current;
   return (
-    <Shell title="Привет! 👋">
-      <p className={styles.subtitle}>Ты делаешь успехи!</p>
+    <Shell title={header?.title}>
+      {header ? (
+        <>
+          <p className={styles.subtitle}>{header.subtitle}</p>
+          {header.sessionId && (
+            <Link className={styles.secondary} to={`/sessions/${header.sessionId}`}>
+              Продолжить
+            </Link>
+          )}
+        </>
+      ) : (
+        <div className={styles.headerSkeleton} role="status" aria-label="Загружаем библиотеку" />
+      )}
       <h2 className={styles.srOnly}>Мои наборы</h2>
       {query.isPending && <Notice>Загружаем ваши наборы…</Notice>}
       {query.isError && <Failure error={query.error} retry={() => void query.refetch()} />}
@@ -235,11 +268,14 @@ export function LibraryPage() {
 const sourceKey = 'uchi-cards-source-v1';
 function readSource(): { sourceType: Deck['sourceType']; text: string; filename: string } {
   try {
-    return JSON.parse(sessionStorage.getItem(sourceKey) || 'null') || { sourceType: 'manual', text: '', filename: '' };
+    return JSON.parse(sessionStorage.getItem(sourceKey) || 'null') || { sourceType: 'photo', text: '', filename: '' };
   } catch {
-    return { sourceType: 'manual', text: '', filename: '' };
+    return { sourceType: 'photo', text: '', filename: '' };
   }
 }
+const newDraftKey = 'uchi-cards-editor-0';
+const draftSourceKey = 'uchi-cards-draft-source';
+const titleTouchedKey = 'uchi-cards-title-touched';
 export function SourcePage() {
   const initial = readSource();
   const [mode, setMode] = useState<Deck['sourceType']>(initial.sourceType);
@@ -258,6 +294,14 @@ export function SourcePage() {
     return () => URL.revokeObjectURL(url);
   }, [photo]);
   const [recognizing, setRecognizing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const generationRequest = useRef(0);
+  useEffect(
+    () => () => {
+      generationRequest.current += 1;
+    },
+    []
+  );
   const recognitionRequest = useRef(0);
   useEffect(
     () => () => {
@@ -272,13 +316,74 @@ export function SourcePage() {
     setRecognizing(true);
     try {
       const result = await flashcardsApi.recognize(file);
-      if (request === recognitionRequest.current) setText(result.text);
+      if (request === recognitionRequest.current) {
+        if (!result.text.trim()) throw new Error('Не удалось прочитать текст. Выбери более чёткое фото.');
+        setText(result.text);
+      }
     } catch (err) {
       if (request === recognitionRequest.current) setError(message(err));
     } finally {
       if (request === recognitionRequest.current) setRecognizing(false);
     }
   }
+  async function create(sourceType: Deck['sourceType'] = mode) {
+    const material = sourceType === 'manual' ? '' : text;
+    const signature = JSON.stringify({ sourceType, text: material });
+    sessionStorage.setItem(sourceKey, JSON.stringify({ sourceType, text: material, filename: photo?.name || '' }));
+    if (sessionStorage.getItem(draftSourceKey) === signature && sessionStorage.getItem(newDraftKey)) {
+      nav('/new/review');
+      return;
+    }
+    const request = ++generationRequest.current;
+    setGenerating(true);
+    setError('');
+    try {
+      const generated =
+        sourceType === 'manual'
+          ? null
+          : await flashcardsApi.generate(material, 0, sourceType === 'photo' ? 'ocr' : 'text');
+      if (request !== generationRequest.current) return;
+      if (generated && !generated.cards.length)
+        throw new Error('Не удалось выделить карточки. Попробуй другой материал или исправь текст.');
+      let priorTitle = '';
+      try {
+        if (sessionStorage.getItem(titleTouchedKey))
+          priorTitle = JSON.parse(sessionStorage.getItem(newDraftKey) || '{}').title || '';
+      } catch {
+        /* No previous draft. */
+      }
+      const draft = {
+        id: 0,
+        title: sourceType === 'manual' ? '' : priorTitle || generated?.suggestedTitle || '',
+        sourceType,
+        revision: 0,
+        isDraft: true,
+        coverIconId: generated?.coverIconId || 'flashcards-leaf',
+        coverSelection: 'auto',
+        cards: generated?.cards || [emptyCard()],
+        knowledgePercent: null,
+        knownCount: 0,
+        reviewedCount: 0
+      };
+      sessionStorage.setItem(newDraftKey, JSON.stringify(draft));
+      sessionStorage.setItem(draftSourceKey, signature);
+      sessionStorage.setItem('uchi-cards-generation-warnings', JSON.stringify(generated?.warnings || []));
+      nav('/new/review');
+    } catch (err) {
+      if (request === generationRequest.current) setError(message(err));
+    } finally {
+      if (request === generationRequest.current) setGenerating(false);
+    }
+  }
+  if (generating)
+    return (
+      <Shell title="Готовим карточки" navigationTitle="Новый набор">
+        <div className={styles.sourceIllustration} role="status">
+          <Illustration id="sparkles" />
+          <p>Анализируем материал и выбираем полезные пары…</p>
+        </div>
+      </Shell>
+    );
   return (
     <Shell
       title={
@@ -306,7 +411,12 @@ export function SourcePage() {
             aria-pressed={mode === value}
             className={mode === value ? styles.selected : ''}
             onClick={() => {
+              if (value === 'manual') {
+                void create('manual');
+                return;
+              }
               setMode(value);
+              setText('');
               setError('');
             }}
           >
@@ -375,8 +485,7 @@ export function SourcePage() {
           className={styles.manualOption}
           disabled={recognizing}
           onClick={() => {
-            setMode('manual');
-            setError('');
+            void create('manual');
           }}
         >
           <span className={styles.manualIcon}>
@@ -435,122 +544,32 @@ export function SourcePage() {
       <button
         className={styles.primary}
         disabled={mode !== 'manual' && (recognizing || !text.trim())}
-        onClick={() => {
-          sessionStorage.setItem(
-            sourceKey,
-            JSON.stringify({ sourceType: mode, text: mode !== 'manual' ? text : '', filename: photo?.name || '' })
-          );
-          nav('/new/settings');
-        }}
+        onClick={() => void create()}
       >
         Продолжить <span>→</span>
       </button>
     </Shell>
   );
 }
-export function SettingsPage() {
-  const source = readSource();
-  const [title, setTitle] = useState('');
-  const [count, setCount] = useState(20);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+export function NewEditorPage() {
   const nav = useNavigate();
-  const client = useQueryClient();
-  async function create() {
-    setBusy(true);
-    setError('');
-    try {
-      const generated =
-        source.sourceType !== 'manual'
-          ? await flashcardsApi.generate(source.text, count, source.sourceType === 'photo' ? 'ocr' : 'text')
-          : null;
-      const cards = generated ? generated.cards : [emptyCard()];
-      const deck = await flashcardsApi.save({
-        title: title.trim(),
-        sourceType: source.sourceType,
-        revision: 0,
-        isDraft: true,
-        cards
-      });
-      await client.invalidateQueries({ queryKey: deckKeys.all });
-      sessionStorage.removeItem(sourceKey);
-      nav(`/decks/${deck.id}/edit`, { replace: true, state: { generationWarnings: generated?.warnings || [] } });
-    } catch (err) {
-      setError(message(err));
-    } finally {
-      setBusy(false);
-    }
+  let draft: Deck | null = null;
+  let warnings: string[] = [];
+  try {
+    draft = JSON.parse(sessionStorage.getItem(newDraftKey) || 'null');
+    warnings = JSON.parse(sessionStorage.getItem('uchi-cards-generation-warnings') || '[]');
+  } catch {
+    /* Invalid local draft is returned to source selection. */
   }
-  return (
-    <Shell title="Настроим набор" navigationTitle="Новый набор" back="/new">
-      <p className={styles.subtitle}>И мы создадим для тебя карточки.</p>
-      <section className={styles.sourceSummary}>
-        <span className={styles.sourceIcon}>
-          <Icon name={source.sourceType === 'manual' ? 'pencil' : 'file'} />
-        </span>
-        <div>
-          <strong>
-            {source.sourceType === 'photo'
-              ? 'Фото загружено'
-              : source.sourceType === 'text'
-              ? 'Текст добавлен'
-              : 'Ручное создание'}
-          </strong>
-          <small>
-            {source.filename || (source.sourceType === 'manual' ? 'Твои вопросы и ответы' : 'Материал для карточек')}
-          </small>
-        </div>
-        <Icon name="sourceCheck" />
-      </section>
-      <label className={styles.panel}>
-        Название
-        <input
-          value={title}
-          maxLength={120}
-          placeholder="Например, Фотосинтез"
-          onChange={(event) => setTitle(event.target.value)}
-          autoFocus
-        />
-      </label>
-      {source.sourceType !== 'manual' && (
-        <>
-          <section className={styles.panel}>
-            <p>Количество карточек</p>
-            <div className={styles.segment}>
-              {[10, 20, 30].map((value) => (
-                <button
-                  key={value}
-                  aria-pressed={count === value}
-                  className={count === value ? styles.selected : ''}
-                  onClick={() => setCount(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </section>
-          <section className={styles.aiSummary}>
-            <span className={styles.aiIcon}>
-              <Icon name="ai" />
-            </span>
-            <div>
-              <strong>ИИ создаст черновик</strong>
-              <small>Ты сможешь проверить и изменить карточки. Если фактов мало, карточек будет меньше.</small>
-            </div>
-          </section>
-        </>
-      )}
-      {busy && (
-        <div className={styles.sourceIllustration} role="status">
-          <Illustration id="sparkles" />
-          <p>Готовим карточки по материалу…</p>
-        </div>
-      )}
-      {error && <Notice error>{error}</Notice>}
-      <button className={styles.primary} disabled={!title.trim() || busy} onClick={() => void create()}>
-        <Icon name="generate" />
-        {busy ? 'Создаём черновик…' : source.sourceType === 'manual' ? 'Добавить карточки' : 'Создать карточки'}
-      </button>
+  const valid = draft?.id === 0 && Array.isArray(draft.cards) && typeof draft.title === 'string';
+  useEffect(() => {
+    if (!valid) nav('/new', { replace: true });
+  }, [valid, nav]);
+  return valid && draft ? (
+    <Editor initial={draft} warnings={Array.isArray(warnings) ? warnings : []} />
+  ) : (
+    <Shell>
+      <Notice>Открываем создание…</Notice>
     </Shell>
   );
 }
@@ -571,11 +590,13 @@ export function EditorPage() {
     );
   return <Editor key={query.data.id} initial={query.data} />;
 }
-function Editor({ initial }: { initial: Deck }) {
+function Editor({ initial, warnings }: { initial: Deck; warnings?: string[] }) {
   const location = useLocation();
-  const generationWarnings: string[] = Array.isArray(location.state?.generationWarnings)
-    ? location.state.generationWarnings.filter((warning: unknown) => typeof warning === 'string')
-    : [];
+  const generationWarnings: string[] =
+    warnings ||
+    (Array.isArray(location.state?.generationWarnings)
+      ? location.state.generationWarnings.filter((warning: unknown) => typeof warning === 'string')
+      : []);
   const draftKey = `uchi-cards-editor-${initial.id}`;
   const [draft, setDraft] = useState<DeckInput>(() => {
     try {
@@ -593,7 +614,7 @@ function Editor({ initial }: { initial: Deck }) {
   const nav = useNavigate();
   const client = useQueryClient();
   const baseline = useRef(JSON.stringify({ ...initial, cards: initial.cards.map((card) => ({ ...card })) }));
-  const dirty = JSON.stringify(draft) !== baseline.current;
+  const dirty = initial.id === 0 || JSON.stringify(draft) !== baseline.current;
   useEffect(() => {
     const onUnload = (event: BeforeUnloadEvent) => {
       if (dirty) {
@@ -624,15 +645,22 @@ function Editor({ initial }: { initial: Deck }) {
     setBusy(true);
     setError('');
     try {
-      const result = await flashcardsApi.save({ ...draft, isDraft }, initial.id);
+      const result = await flashcardsApi.save({ ...draft, isDraft }, initial.id || undefined);
       const next = { ...result, cards: result.cards.map((card) => ({ ...card })) };
       baseline.current = JSON.stringify(next);
       sessionStorage.removeItem(draftKey);
+      if (!initial.id) {
+        sessionStorage.removeItem(sourceKey);
+        sessionStorage.removeItem(draftSourceKey);
+        sessionStorage.removeItem(titleTouchedKey);
+        sessionStorage.removeItem('uchi-cards-generation-warnings');
+      }
       setDraft(next);
-      client.setQueryData(deckKeys.deck(initial.id), result);
+      client.setQueryData(deckKeys.deck(result.id), result);
       await client.invalidateQueries({ queryKey: deckKeys.all });
       setSaved('Черновик сохранён');
       if (!isDraft) nav(`/decks/${result.id}`);
+      else if (!initial.id) nav(`/decks/${result.id}/edit`, { replace: true });
     } catch (err) {
       setError(message(err));
     } finally {
@@ -649,7 +677,7 @@ function Editor({ initial }: { initial: Deck }) {
       onBack={() => {
         if (busy) return;
         if (!dirty || window.confirm('Есть несохранённые правки. Выйти без сохранения?'))
-          nav(initial.isDraft ? '/' : `/decks/${initial.id}`);
+          nav(!initial.id ? '/new' : initial.isDraft ? '/' : `/decks/${initial.id}`);
       }}
     >
       <p className={styles.subtitle}>Всё верно? Можно поправить текст.</p>
@@ -659,7 +687,10 @@ function Editor({ initial }: { initial: Deck }) {
           value={draft.title}
           maxLength={120}
           disabled={busy}
-          onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+          onChange={(event) => {
+            if (!initial.id) sessionStorage.setItem(titleTouchedKey, 'true');
+            setDraft({ ...draft, title: event.target.value });
+          }}
         />
       </label>
       <details className={styles.coverPicker}>

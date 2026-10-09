@@ -102,3 +102,11 @@ Backend выбирает `pair` / `definition` / `qa`; `question` и `answer` о
 The flip instruction is below the card. The rotor height is clamp(320px, 55svh, 436px), stable across faces and sets at a given viewport. Long text scrolls inside; formulas have responsive sizing. Flip, swipe and grading remain unchanged.
 
 CardText safely renders plain text and inline LaTeX using native MathML, without HTML injection or new dependencies. Common powers, subscripts, fractions, roots and Greek symbols are supported; unknown commands remain visible with a review warning. The existing editor provides a math preview and editable text fields. Knowledge metadata stays hidden from the student.
+
+## Streamlined creation and contextual library
+
+The lower-left + opens source selection. Photo/text proceed through existing recognition/generation directly into /new/review; manual opens the same local editor with a blank title and one empty pair. The old /new/settings URL redirects to source selection. There are no subject/title/count settings before generation. count=0 requests the server's automatic maximum; fewer meaningful pairs are allowed.
+
+No server deck is created until Save deck (or explicit Save draft). Editable suggested title, cover, warnings and card metadata arrive together. The local draft survives navigation; manually edited titles remain authoritative. Unsaved exit is confirmed. Empty OCR, invalid/multiple files and model errors keep actionable retry/source controls.
+
+The library queries /home once per navigation entry and freezes the resolved header while visible. It uses server-verified resumable sessions and distinct mastered cards from completed sessions in the browser's timezone. Loading shows a skeleton; metric errors use neutral copy. Training gestures and adaptive mastery rules are unchanged. Preview arrows have a fixed 32x32 circular shape.
