@@ -823,7 +823,6 @@ export function DeckPage() {
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [showAll, setShowAll] = useState(false);
   const deckId = Number(useParams().id);
   const [direction, setDirection] = useState<'forward' | 'reverse'>(() => {
     try {
@@ -931,7 +930,7 @@ export function DeckPage() {
       >
         <Icon name="play" /> {canResume ? 'Продолжить тренировку' : 'Начать тренировку'}
       </button>
-      <div className={styles.row}>
+      <div className={`${styles.row} ${styles.deckActions}`}>
         <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
           Редактировать
         </Link>
@@ -942,7 +941,7 @@ export function DeckPage() {
       {error && <Notice error>{error}</Notice>}
       {active.isError && <Failure error={active.error} retry={() => void active.refetch()} />}
       <div className={`${styles.row} ${styles.examplesHeader}`}>
-        <h2 className={styles.examplesTitle}>Примеры карточек</h2>
+        <h2 className={styles.examplesTitle}>Список карточек</h2>
         <button className={styles.textButton} disabled={busy || !deck.cards.length} onClick={swapDirection}>
           Поменять местами
         </button>
@@ -952,11 +951,11 @@ export function DeckPage() {
         <small>Обратная сторона</small>
       </div>
       <div className={styles.deckList}>
-        {deck.cards.slice(0, showAll ? 100 : 4).map((card) => (
+        {deck.cards.map((card, index) => (
           <section
             key={card.id}
             className={`${styles.panel} ${styles.pairColumns}`}
-            aria-label={`Карточка ${deck.cards.indexOf(card) + 1}`}
+            aria-label={`Карточка ${index + 1}`}
           >
             <div>
               <CardText text={direction === 'forward' ? card.question : card.answer} />
@@ -967,11 +966,6 @@ export function DeckPage() {
           </section>
         ))}
       </div>
-      {deck.cards.length > 4 && (
-        <button className={styles.secondary} onClick={() => setShowAll(!showAll)}>
-          {showAll ? 'Свернуть' : 'Смотреть все'}
-        </button>
-      )}
     </Shell>
   );
 }

@@ -1337,3 +1337,20 @@
 .pairColumns > div { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .pairColumns > div + div { border-left: 1px solid #ffffff20; padding-left: 16px; }
 .examplesHeader button { flex-shrink: 0; font-size: 13px; }
+
+.deckActions > .textButton {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  color: var(--muted, #aaa3ca);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-decoration: none;
+  padding: 8px 0;
+}
+.deckActions > .textButton:hover {
+  color: #d3cdeb;
+}
