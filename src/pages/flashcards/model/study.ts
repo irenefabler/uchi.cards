@@ -9,7 +9,7 @@ export function knowledgePercent(statuses: ('known' | 'unknown' | null)[]) {
   return Math.round((statuses.filter((status) => status === 'known').length / statuses.length) * 100);
 }
 export function validCards(cards: { question: string; answer: string }[]) {
-  const questions = cards.map((card) => card.question.trim().toLocaleLowerCase());
+  const questions = cards.map((card) => `${card.question.trim()}\u0000${card.answer.trim()}`.toLocaleLowerCase());
   return (
     cards.length > 0 &&
     cards.length <= 100 &&

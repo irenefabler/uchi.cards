@@ -1,4 +1,16 @@
-export type Card = { id: number; question: string; answer: string; knowledgeStatus: 'known' | 'unknown' | null };
+export type CardSemantics = {
+  type?: 'pair' | 'definition' | 'qa';
+  frontLanguage?: string;
+  backLanguage?: string;
+  source?: 'manual' | 'text' | 'ocr';
+  needsReview?: boolean;
+};
+export type Card = CardSemantics & {
+  id: number;
+  question: string;
+  answer: string;
+  knowledgeStatus: 'known' | 'unknown' | null;
+};
 export type Deck = {
   id: number;
   title: string;
@@ -12,7 +24,7 @@ export type Deck = {
   activeSessionId?: number | null;
 };
 export type DeckInput = Pick<Deck, 'title' | 'sourceType' | 'revision' | 'isDraft'> & {
-  cards: Pick<Card, 'id' | 'question' | 'answer'>[];
+  cards: (Pick<Card, 'id' | 'question' | 'answer'> & CardSemantics)[];
 };
 export type StudySession = {
   nextCardId: number;
@@ -71,8 +83,8 @@ export const flashcardsApi = {
     form.append('photo', photo);
     return request<{ text: string }>('/recognitions', 'POST', form, 85000);
   },
-  generate: (text: string, count: number) =>
-    request<Generation>('/generations', 'POST', { sourceType: 'text', text, count }, 85000),
+  generate: (text: string, count: number, origin: 'text' | 'ocr' = 'text') =>
+    request<Generation>('/generations', 'POST', { sourceType: 'text', text, count, origin }, 85000),
   list: (page = 1, draft = false) => request<Deck[]>(`/decks?page=${page}&draft=${draft}`),
   get: (id: number) => request<Deck>(`/decks/${id}`),
   save: (input: DeckInput, id?: number) => request<Deck>(id ? `/decks/${id}` : '/decks', id ? 'PUT' : 'POST', input),

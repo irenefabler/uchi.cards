@@ -20,14 +20,20 @@ describe('study gestures', () => {
     expect(knowledgePercent(['unknown', null])).toBe(0);
     expect(knowledgePercent(['known', null])).toBe(50);
   });
-  it('rejects incomplete and duplicate questions', () => {
+  it('rejects incomplete and duplicate cards', () => {
     expect(validCards([{ question: 'Вопрос', answer: '' }])).toBe(false);
     expect(
       validCards([
         { question: 'Вопрос', answer: 'Ответ' },
-        { question: ' ВОПРОС ', answer: 'Другой' }
+        { question: ' ВОПРОС ', answer: 'Ответ' }
       ])
     ).toBe(false);
     expect(validCards([{ question: 'Вопрос', answer: 'Ответ' }])).toBe(true);
+    expect(
+      validCards([
+        { question: 'Ключ', answer: 'Key' },
+        { question: 'Ключ', answer: 'Spring' }
+      ])
+    ).toBe(true);
   });
 });

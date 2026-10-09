@@ -40,11 +40,11 @@ const session: StudySession = {
   knowledgePercent: null,
   finishedAt: null
 };
-function mount(element: React.ReactNode, path = '/sessions/1', route = '/sessions/:id') {
+function mount(element: React.ReactNode, path = '/sessions/1', route = '/sessions/:id', state?: unknown) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[{ pathname: path, state }]}>
         <Routes>
           <Route path={route} element={element} />
           <Route path="/decks/:id" element={<p>Место сохранено</p>} />
@@ -319,7 +319,9 @@ it.each(['text', 'photo'] as const)('generates %s cards from the actual source t
   mount(<SettingsPage />, '/new/settings', '/new/settings');
   await userEvent.type(screen.getByLabelText('Название'), 'Урок');
   await userEvent.click(screen.getByRole('button', { name: /Создать карточки/ }));
-  await waitFor(() => expect(flashcardsApi.generate).toHaveBeenCalledWith('Материал урока', 20));
+  await waitFor(() =>
+    expect(flashcardsApi.generate).toHaveBeenCalledWith('Материал урока', 20, sourceType === 'photo' ? 'ocr' : 'text')
+  );
   await screen.findByText('Новый черновик');
   expect(flashcardsApi.save).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -398,4 +400,103 @@ it('ignores recognition results after the photo has been removed', async () => {
   });
   await waitFor(() => expect(screen.queryByLabelText('Распознанный текст')).toBeNull());
   expect((screen.getByRole('button', { name: /Продолжить/ }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it.each(['pair', 'definition'] as const)('edits both %s sides and preserves semantic metadata', async (type) => {
+  const deck = {
+    id: 1,
+    title: 'Словарь',
+    sourceType: 'photo' as const,
+    revision: 1,
+    isDraft: true,
+    cards: [
+      {
+        id: 10,
+        question: 'Кровать',
+        answer: 'Bed',
+        type,
+        frontLanguage: 'ru',
+        backLanguage: 'en',
+        source: 'ocr' as const,
+        needsReview: true,
+        knowledgeStatus: null
+      }
+    ],
+    knowledgePercent: null,
+    knownCount: 0,
+    reviewedCount: 0
+  };
+  vi.mocked(flashcardsApi.get).mockResolvedValue(deck);
+  vi.mocked(flashcardsApi.save).mockResolvedValue(deck);
+  mount(<EditorPage />, '/decks/1/edit', '/decks/:id/edit');
+  const front = await screen.findByLabelText('Передняя сторона');
+  const back = screen.getByLabelText('Обратная сторона');
+  expect((front as HTMLTextAreaElement).value).toBe('Кровать');
+  expect((back as HTMLTextAreaElement).value).toBe('Bed');
+  expect(screen.getByText(/Неясный фрагмент/)).toBeTruthy();
+  await userEvent.clear(front);
+  await userEvent.type(front, 'Окно');
+  await userEvent.clear(back);
+  await userEvent.type(back, 'Window');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить набор' }));
+  await waitFor(() =>
+    expect(flashcardsApi.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cards: [
+          expect.objectContaining({
+            question: 'Окно',
+            answer: 'Window',
+            type,
+            frontLanguage: 'ru',
+            backLanguage: 'en',
+            source: 'ocr',
+            needsReview: false
+          })
+        ]
+      }),
+      1
+    )
+  );
+});
+
+it('shows fewer-card warnings in the editor', async () => {
+  vi.mocked(flashcardsApi.get).mockResolvedValue({
+    id: 1,
+    title: 'Словарь',
+    sourceType: 'text',
+    revision: 1,
+    isDraft: true,
+    cards: [{ id: 10, question: 'Кровать', answer: 'Bed', type: 'pair', knowledgeStatus: null }],
+    knowledgePercent: null,
+    knownCount: 0,
+    reviewedCount: 0
+  });
+  mount(<EditorPage />, '/decks/1/edit', '/decks/:id/edit', {
+    generationWarnings: ['Создано меньше карточек: недостаточно материала.']
+  });
+  expect(await screen.findByText('Создано меньше карточек: недостаточно материала.')).toBeTruthy();
+});
+
+it('trains a language pair without inventing a question', async () => {
+  vi.mocked(flashcardsApi.session).mockResolvedValue({
+    ...session,
+    cards: [
+      {
+        ...session.cards[0],
+        type: 'pair',
+        question: 'Кровать',
+        answer: 'Bed',
+        frontLanguage: 'ru',
+        backLanguage: 'en'
+      },
+      session.cards[1]
+    ]
+  });
+  mount(<StudyPage />);
+  expect(await screen.findByRole('heading', { name: 'Кровать' })).toBeTruthy();
+  const card = screen.getByRole('button', { name: 'Карточка 1. Вопрос: Кровать' });
+  fireEvent.keyDown(card, { key: 'Enter' });
+  expect(screen.getByRole('heading', { name: 'Bed' })).toBeTruthy();
+  expect(screen.queryByText(/Как переводится/)).toBeNull();
+  expect(flashcardsApi.grade).not.toHaveBeenCalled();
 });

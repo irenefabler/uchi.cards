@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams, Link } from 'react-router';
+import { useNavigate, useParams, useLocation, Link } from 'react-router';
 import { flashcardsApi, deckKeys, ApiError } from 'src/shared/api/flashcards';
 import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
 import { validCards } from '../model/study';
@@ -450,7 +450,7 @@ export function SourcePage() {
           <Icon name="hint" />{' '}
           <span>
             {mode === 'text'
-              ? 'Создадим вопросы и ответы по вашему тексту. Перед сохранением их можно проверить и изменить.'
+              ? 'Создадим пары, определения или вопросы по вашему материалу. Перед сохранением их можно проверить и изменить.'
               : 'Чёткое фото — точные карточки. Убедись, что текст хорошо виден.'}
           </span>
         </p>
@@ -484,7 +484,10 @@ export function SettingsPage() {
     setBusy(true);
     setError('');
     try {
-      const generated = source.sourceType !== 'manual' ? await flashcardsApi.generate(source.text, count) : null;
+      const generated =
+        source.sourceType !== 'manual'
+          ? await flashcardsApi.generate(source.text, count, source.sourceType === 'photo' ? 'ocr' : 'text')
+          : null;
       const cards = generated ? generated.cards : [emptyCard()];
       const deck = await flashcardsApi.save({
         title: title.trim(),
@@ -495,7 +498,7 @@ export function SettingsPage() {
       });
       await client.invalidateQueries({ queryKey: deckKeys.all });
       sessionStorage.removeItem(sourceKey);
-      nav(`/decks/${deck.id}/edit`, { replace: true });
+      nav(`/decks/${deck.id}/edit`, { replace: true, state: { generationWarnings: generated?.warnings || [] } });
     } catch (err) {
       setError(message(err));
     } finally {
@@ -587,6 +590,10 @@ export function EditorPage() {
   return <Editor key={query.data.id} initial={query.data} />;
 }
 function Editor({ initial }: { initial: Deck }) {
+  const location = useLocation();
+  const generationWarnings: string[] = Array.isArray(location.state?.generationWarnings)
+    ? location.state.generationWarnings.filter((warning: unknown) => typeof warning === 'string')
+    : [];
   const draftKey = `uchi-cards-editor-${initial.id}`;
   const [draft, setDraft] = useState<DeckInput>(() => {
     try {
@@ -626,7 +633,7 @@ function Editor({ initial }: { initial: Deck }) {
     setSaved('');
     setDraft((prev) => ({
       ...prev,
-      cards: prev.cards.map((card, i) => (i === index ? { ...card, [key]: value } : card))
+      cards: prev.cards.map((card, i) => (i === index ? { ...card, [key]: value, needsReview: false } : card))
     }));
   }
   async function save(isDraft: boolean) {
@@ -648,7 +655,9 @@ function Editor({ initial }: { initial: Deck }) {
       setBusy(false);
     }
   }
-  const duplicates = draft.cards.map((card) => card.question.trim().toLocaleLowerCase());
+  const duplicates = draft.cards.map((card) =>
+    `${card.question.trim()}\u0000${card.answer.trim()}`.toLocaleLowerCase()
+  );
   return (
     <Shell
       title="Проверь карточки"
@@ -670,8 +679,11 @@ function Editor({ initial }: { initial: Deck }) {
         />
       </label>
       {draft.sourceType !== 'manual' && (
-        <Notice>Карточки созданы по тексту. Проверьте вопросы и ответы перед сохранением.</Notice>
+        <Notice>Карточки созданы по материалу. Проверьте обе стороны перед сохранением.</Notice>
       )}
+      {generationWarnings.map((warning, index) => (
+        <Notice key={`${index}-${warning}`}>{warning}</Notice>
+      ))}
       <div className={styles.editList}>
         {draft.cards.map((card, index) => (
           <section key={`${index}-${card.id}`} className={`${styles.panel} ${styles.editCard}`}>
@@ -686,11 +698,14 @@ function Editor({ initial }: { initial: Deck }) {
                 <Icon name="trash" />
               </button>
             </div>
+            {card.needsReview && (
+              <Notice error>Неясный фрагмент. Исправьте карточку по исходнику; перевод не угадывался.</Notice>
+            )}
             <label>
-              Вопрос
+              {card.type && card.type !== 'qa' ? 'Передняя сторона' : 'Вопрос'}
               <textarea
                 rows={2}
-                aria-label="Вопрос"
+                aria-label={card.type && card.type !== 'qa' ? 'Передняя сторона' : 'Вопрос'}
                 value={card.question}
                 maxLength={500}
                 disabled={busy}
@@ -699,10 +714,10 @@ function Editor({ initial }: { initial: Deck }) {
               <small className={styles.charCount}>{card.question.length}/500</small>
             </label>
             <label>
-              Ответ
+              {card.type && card.type !== 'qa' ? 'Обратная сторона' : 'Ответ'}
               <textarea
                 rows={3}
-                aria-label="Ответ"
+                aria-label={card.type && card.type !== 'qa' ? 'Обратная сторона' : 'Ответ'}
                 value={card.answer}
                 maxLength={2000}
                 disabled={busy}
@@ -711,7 +726,7 @@ function Editor({ initial }: { initial: Deck }) {
               <small className={styles.charCount}>{card.answer.length}/2000</small>
             </label>
             {card.question.trim() && duplicates.indexOf(duplicates[index]) !== index && (
-              <Notice error>Такой вопрос уже есть.</Notice>
+              <Notice error>Такая карточка уже есть.</Notice>
             )}
             {!card.answer.trim() && <small>Добавьте ответ перед сохранением набора.</small>}
           </section>
