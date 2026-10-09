@@ -895,12 +895,26 @@
   color: var(--muted);
   font-size: 14px;
 }
-.gestureHints {
+.gradeActions {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  gap: 16px;
+}
+.gradeActions button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 44px;
+  padding: 0 6px;
   color: var(--muted);
-  padding: 16px 6px 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.gradeActions button:hover:not(:disabled) {
+  color: var(--pale);
 }
 .modalBackdrop {
   position: fixed;

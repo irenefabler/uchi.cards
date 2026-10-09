@@ -29,7 +29,6 @@ import arcTopAsset from './assets/6-6351-img.svg';
 import arcBottomAsset from './assets/6-6351-img1.svg';
 import studyLeafAsset from './assets/6-6351-img2.svg';
 import flipAsset from './assets/6-6351-imgRotate3D.svg';
-import rotateAsset from './assets/6-6351-imgRotateCcw.svg';
 import closeAsset from './assets/6-6351-imgX.svg';
 import cupAsset from './assets/6-6395-img.svg';
 import checkAsset from './assets/6-6395-imgCheck.svg';
@@ -63,7 +62,6 @@ const artwork = {
   arcBottom: arcBottomAsset,
   studyLeaf: studyLeafAsset,
   flip: flipAsset,
-  rotate: rotateAsset,
   cup: cupAsset,
   check: checkAsset,
   advice: adviceAsset,
@@ -1060,24 +1058,12 @@ export function StudyPage() {
               {flipped ? 'Смахни влево, если не знаешь, вправо — если знаешь' : 'Переверни карточку и проверь себя'}
             </p>
           </div>
-          <button
-            className={styles.primary}
-            disabled={busy || !!pending.current}
-            onClick={() => setFlipped((prev) => !prev)}
-          >
-            <Icon name="rotate" />
-            {flipped ? 'Показать вопрос' : 'Показать ответ'}
-          </button>
-          <div className={styles.gestureHints} aria-hidden="true">
-            <span>‹ Не знаю</span>
-            <span>Знаю ›</span>
-          </div>
-          <div className={styles.srOnly}>
-            <button disabled={busy} onClick={() => void grade('unknown')}>
-              Не знаю
+          <div className={styles.gradeActions}>
+            <button aria-label="Не знаю" disabled={busy || !!pending.current} onClick={() => void grade('unknown')}>
+              <span aria-hidden="true">‹</span> Не знаю
             </button>
-            <button disabled={busy} onClick={() => void grade('known')}>
-              Знаю
+            <button aria-label="Знаю" disabled={busy || !!pending.current} onClick={() => void grade('known')}>
+              Знаю <span aria-hidden="true">›</span>
             </button>
           </div>
         </>

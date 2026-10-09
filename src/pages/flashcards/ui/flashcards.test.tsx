@@ -67,6 +67,26 @@ beforeEach(() => {
 });
 
 describe('study interaction', () => {
+  it.each([
+    ['Не знаю', 'unknown', false],
+    ['Знаю', 'known', false],
+    ['Не знаю', 'unknown', true],
+    ['Знаю', 'known', true]
+  ] as const)('grades with %s (%s), flipped=%s', async (label, status, flipped) => {
+    vi.mocked(flashcardsApi.grade).mockResolvedValue({
+      ...session,
+      nextCardId: 11,
+      presentationIndex: 1
+    });
+    mount(<StudyPage />);
+    const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
+    if (flipped) fireEvent.keyDown(card, { key: 'Enter' });
+    expect(screen.queryByRole('button', { name: 'Показать ответ' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: label }));
+    await screen.findByRole('button', { name: 'Карточка 2. Вопрос: Второй вопрос' });
+    expect(flashcardsApi.grade).toHaveBeenCalledTimes(1);
+    expect(flashcardsApi.grade).toHaveBeenCalledWith(1, expect.objectContaining({ cardId: 10, status }));
+  });
   it('flips by keyboard without grading, then grades the answer side', async () => {
     vi.mocked(flashcardsApi.grade).mockResolvedValue({
       ...session,
@@ -96,6 +116,8 @@ describe('study interaction', () => {
     const card = await screen.findByRole('button', { name: 'Карточка 1. Вопрос: Вопрос' });
     fireEvent.keyDown(card, { key: 'ArrowLeft' });
     fireEvent.keyDown(card, { key: 'ArrowLeft' });
+    expect(screen.getByRole('button', { name: 'Знаю' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Не знаю' }).hasAttribute('disabled')).toBe(true);
     expect(flashcardsApi.grade).toHaveBeenCalledTimes(1);
     resolve({
       ...session,
