@@ -1,5 +1,49 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Factor A';
+  src:
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Regular-Web.woff2') format('woff2'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Regular-Web.woff') format('woff'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Regular-Web.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Factor A';
+  src:
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Bold-Web.woff2') format('woff2'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Bold-Web.woff') format('woff'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Bold-Web.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Factor A';
+  src:
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Extrabold-Web.woff2') format('woff2'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Extrabold-Web.woff') format('woff'),
+    url('https://static.uchi.ru/files/content-1-4/common/fonts/FactorA/FactorA-Extrabold-Web.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
 /* Например можно задавать глобальные custom properties */
 :root {
   --some-custom-prop: 10;
@@ -9,5 +53,5 @@
    Расширяют/переопределяют дефолтную тему Tailwind. */
 @theme {
   --color-primary: oklch(0.55 0.2 250);
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Factor A', system-ui, sans-serif;
 }
