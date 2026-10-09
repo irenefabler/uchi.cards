@@ -1,0 +1,965 @@
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode, PointerEvent as ReactPointerEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams, Link } from 'react-router';
+import { flashcardsApi, deckKeys } from 'src/shared/api/flashcards';
+import type { Deck, DeckInput, Grade } from 'src/shared/api/flashcards';
+import { Environment } from 'src/shared/model/environment';
+import { demoCards } from '../model/demo';
+import { gesture, validCards } from '../model/study';
+import styles from './flashcards.module.css';
+
+const cardCountLabel = (count: number) => {
+  const lastTwo = count % 100,
+    last = count % 10;
+  return `${count} ${
+    lastTwo >= 11 && lastTwo <= 14
+      ? 'карточек'
+      : last === 1
+      ? 'карточка'
+      : last >= 2 && last <= 4
+      ? 'карточки'
+      : 'карточек'
+  }`;
+};
+const emptyCard = () => ({ id: 0, question: '', answer: '' });
+const message = (error: unknown) =>
+  error instanceof Error ? error.message : 'Не удалось выполнить действие. Проверьте подключение.';
+
+function Shell({
+  children,
+  title,
+  back,
+  onBack,
+  study = false
+}: {
+  children: ReactNode;
+  title?: string;
+  back?: string;
+  onBack?: () => void;
+  study?: boolean;
+}) {
+  return (
+    <main className={`${styles.app} ${study ? styles.studyShell : ''}`}>
+      <div className={styles.container}>
+        <header className={styles.header}>
+          {onBack ? (
+            <button className={styles.iconButton} onClick={onBack} aria-label="Назад">
+              ←
+            </button>
+          ) : back ? (
+            <Link className={styles.iconButton} to={back} aria-label="Назад">
+              ←
+            </Link>
+          ) : (
+            <Link className={styles.brand} to="/">
+              Учи.Карточки<span>учись по-своему</span>
+            </Link>
+          )}
+          {!study && <span className={styles.beta}>БЕТА</span>}
+        </header>
+        {title && <h1>{title}</h1>}
+        {children}
+        <div className={styles.decoration} aria-hidden="true" />
+      </div>
+    </main>
+  );
+}
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
+  return (
+    <p className={`${styles.notice} ${error ? styles.error : ''}`} role={error ? 'alert' : 'status'}>
+      {children}
+    </p>
+  );
+}
+function Progress({ value, label = 'Уровень знания' }: { value: number | null; label?: string }) {
+  return (
+    <div className={styles.progress}>
+      <div>
+        <span>{label}</span>
+        <strong>{value === null ? '—' : `${value}%`}</strong>
+      </div>
+      <div
+        className={styles.track}
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={value ?? 0}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <span style={{ width: `${value ?? 0}%` }} />
+      </div>
+      {value === null && <small>Ещё не изучали</small>}
+    </div>
+  );
+}
+function Sprout({ kind = 'leaf' }: { kind?: string }) {
+  return (
+    <div className={`${styles.art} ${styles[kind] ?? ''}`} aria-hidden="true">
+      {kind === 'cup' ? '🏆' : kind === 'photo' ? '▧' : kind === 'book' ? '✦' : '🌱'}
+    </div>
+  );
+}
+function Failure({ error, retry }: { error: unknown; retry: () => void }) {
+  return (
+    <>
+      <Notice error>{message(error)}</Notice>
+      <button className={styles.secondary} onClick={retry}>
+        Попробовать ещё раз
+      </button>
+    </>
+  );
+}
+function useDeck() {
+  const id = Number(useParams().id);
+  return useQuery({ queryKey: deckKeys.deck(id), queryFn: () => flashcardsApi.get(id), enabled: id > 0 });
+}
+
+export function LibraryPage() {
+  const [page, setPage] = useState(1);
+  const query = useQuery({ queryKey: deckKeys.list(page), queryFn: () => flashcardsApi.list(page) });
+  const drafts = useQuery({ queryKey: deckKeys.list(1, true), queryFn: () => flashcardsApi.list(1, true) });
+  return (
+    <Shell title="Мои наборы">
+      <p className={styles.subtitle}>Каждая карточка — маленький шаг к знаниям.</p>
+      {query.isPending && <Notice>Загружаем ваши наборы…</Notice>}
+      {query.isError && <Failure error={query.error} retry={() => void query.refetch()} />}
+      {query.data?.length === 0 && (
+        <div className={styles.empty}>
+          <Sprout kind="book" />
+          <h2>Первый набор — начало!</h2>
+          <p>Добавьте карточки и попробуйте тренировку.</p>
+          <Link className={styles.primary} to="/new">
+            Создать набор
+          </Link>
+        </div>
+      )}
+      <div className={styles.deckList}>
+        {query.data?.map((deck) => (
+          <Link key={deck.id} className={styles.deckItem} to={`/decks/${deck.id}`}>
+            <Sprout />
+            <div>
+              <h2>{deck.title}</h2>
+              <small>{cardCountLabel(deck.cards.length)}</small>
+              <Progress value={deck.knowledgePercent} />
+            </div>
+            <span aria-hidden="true">›</span>
+          </Link>
+        ))}
+      </div>
+      {!!drafts.data?.length && (
+        <section className={styles.drafts}>
+          <h2>Черновики</h2>
+          {drafts.data.map((deck) => (
+            <Link key={deck.id} to={`/decks/${deck.id}/edit`}>
+              {deck.title} <span>Продолжить →</span>
+            </Link>
+          ))}
+        </section>
+      )}
+      {query.data && (
+        <nav className={styles.pagination} aria-label="Страницы библиотеки">
+          {page > 1 && <button onClick={() => setPage(page - 1)}>← Назад</button>}
+          {query.data.length === 50 && <button onClick={() => setPage(page + 1)}>Дальше →</button>}
+        </nav>
+      )}
+      <Link to="/new" className={styles.plus} aria-label="Создать новый набор">
+        +
+      </Link>
+    </Shell>
+  );
+}
+
+const sourceKey = 'uchi-cards-source-v1';
+function readSource(): { sourceType: Deck['sourceType']; text: string; filename: string } {
+  try {
+    return JSON.parse(sessionStorage.getItem(sourceKey) || 'null') || { sourceType: 'manual', text: '', filename: '' };
+  } catch {
+    return { sourceType: 'manual', text: '', filename: '' };
+  }
+}
+export function SourcePage() {
+  const initial = readSource();
+  const [mode, setMode] = useState<Deck['sourceType']>(initial.sourceType);
+  const [text, setText] = useState(initial.text);
+  const [photo, setPhoto] = useState<File>();
+  const [preview, setPreview] = useState('');
+  const [error, setError] = useState('');
+  const nav = useNavigate();
+  useEffect(() => {
+    if (!photo) {
+      setPreview('');
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+  const demo = Environment.demoGeneration;
+  return (
+    <Shell title="Новый набор" back="/">
+      <p className={styles.subtitle}>Выберите, с чего начнём.</p>
+      <div className={styles.segment} role="group" aria-label="Источник карточек">
+        {(
+          [
+            ['photo', 'Фото'],
+            ['text', 'Текст'],
+            ['manual', 'Вручную']
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            aria-pressed={mode === value}
+            className={mode === value ? styles.selected : ''}
+            onClick={() => {
+              setMode(value);
+              setError('');
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === 'photo' && (
+        <section className={`${styles.panel} ${styles.upload}`}>
+          <Sprout kind="photo" />
+          {preview && <img src={preview} alt="Выбранная страница учебника" />}
+          <label className={styles.primary} htmlFor="source-photo">
+            {photo ? 'Заменить фото' : 'Выбрать фото'}
+          </label>
+          <input
+            className={styles.fileInput}
+            id="source-photo"
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={(event) => {
+              const files = event.target.files;
+              if (!files?.length) return;
+              const file = files[0];
+              if (
+                files.length !== 1 ||
+                !['image/jpeg', 'image/png'].includes(file.type) ||
+                file.size > 10 * 1024 * 1024
+              ) {
+                setError('Выберите одно JPG или PNG до 10 МБ.');
+                event.target.value = '';
+                return;
+              }
+              setPhoto(file);
+              setError('');
+            }}
+          />
+          {photo && (
+            <>
+              <p>{photo.name}</p>
+              <button className={styles.textButton} onClick={() => setPhoto(undefined)}>
+                Убрать фото
+              </button>
+            </>
+          )}
+          <small>Одна страница · JPG или PNG · до 10 МБ</small>
+        </section>
+      )}
+      {mode === 'text' && (
+        <label className={styles.panel}>
+          Текст учебника
+          <textarea
+            value={text}
+            maxLength={20000}
+            rows={9}
+            placeholder="Вставьте текст, по которому хотите учиться…"
+            onChange={(event) => setText(event.target.value)}
+          />
+          <small>{text.length} / 20 000</small>
+        </label>
+      )}
+      {mode === 'manual' && (
+        <section className={`${styles.panel} ${styles.empty}`}>
+          <Sprout kind="book" />
+          <h2>Ваши вопросы и ответы</h2>
+          <p>Создайте набор самостоятельно. Можно начать с одной карточки.</p>
+        </section>
+      )}
+      {mode !== 'manual' && (
+        <Notice>
+          {demo
+            ? 'Демо-режим: источник не анализируется и никуда не отправляется. Вы увидите 3 тестовые карточки.'
+            : 'Распознавание и генерация пока не подключены. Создайте набор вручную.'}
+        </Notice>
+      )}
+      {error && <Notice error>{error}</Notice>}
+      <button
+        className={styles.primary}
+        disabled={mode !== 'manual' && (!demo || (mode === 'photo' ? !photo : !text.trim()))}
+        onClick={() => {
+          sessionStorage.setItem(
+            sourceKey,
+            JSON.stringify({ sourceType: mode, text: mode === 'text' ? text : '', filename: photo?.name || '' })
+          );
+          nav('/new/settings');
+        }}
+      >
+        Продолжить <span>→</span>
+      </button>
+    </Shell>
+  );
+}
+export function SettingsPage() {
+  const source = readSource();
+  const [title, setTitle] = useState('');
+  const [count, setCount] = useState(20);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const nav = useNavigate();
+  const client = useQueryClient();
+  async function create() {
+    setBusy(true);
+    setError('');
+    try {
+      if (source.sourceType !== 'manual' && !Environment.demoGeneration)
+        throw new Error('Генерация пока не подключена.');
+      const cards = source.sourceType === 'manual' ? [emptyCard()] : demoCards;
+      const deck = await flashcardsApi.save({
+        title: title.trim(),
+        sourceType: source.sourceType,
+        revision: 0,
+        isDraft: true,
+        cards
+      });
+      await client.invalidateQueries({ queryKey: deckKeys.all });
+      sessionStorage.removeItem(sourceKey);
+      nav(`/decks/${deck.id}/edit`, { replace: true });
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell title="Настройки набора" back="/new">
+      <p className={styles.subtitle}>Название поможет найти набор в библиотеке.</p>
+      <label className={styles.panel}>
+        Название
+        <input
+          value={title}
+          maxLength={120}
+          placeholder="Например, Фотосинтез"
+          onChange={(event) => setTitle(event.target.value)}
+          autoFocus
+        />
+      </label>
+      {source.sourceType !== 'manual' && (
+        <>
+          <section className={styles.panel}>
+            <p>Количество карточек</p>
+            <div className={styles.segment}>
+              {[10, 20, 30].map((value) => (
+                <button
+                  key={value}
+                  aria-pressed={count === value}
+                  className={count === value ? styles.selected : ''}
+                  onClick={() => setCount(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </section>
+          <Notice>
+            Демо-генерация: покажем 3 тестовые карточки вместо {count}. Они не основаны на вашем источнике.
+          </Notice>
+        </>
+      )}
+      {error && <Notice error>{error}</Notice>}
+      <button className={styles.primary} disabled={!title.trim() || busy} onClick={() => void create()}>
+        {busy ? 'Создаём черновик…' : source.sourceType === 'manual' ? 'Добавить карточки' : 'Открыть демо-черновик'}{' '}
+        <span>→</span>
+      </button>
+    </Shell>
+  );
+}
+
+export function EditorPage() {
+  const query = useDeck();
+  if (query.isPending)
+    return (
+      <Shell>
+        <Notice>Открываем редактор…</Notice>
+      </Shell>
+    );
+  if (query.isError)
+    return (
+      <Shell back="/">
+        <Failure error={query.error} retry={() => void query.refetch()} />
+      </Shell>
+    );
+  return <Editor key={query.data.id} initial={query.data} />;
+}
+function Editor({ initial }: { initial: Deck }) {
+  const draftKey = `uchi-cards-editor-${initial.id}`;
+  const [draft, setDraft] = useState<DeckInput>(() => {
+    try {
+      const local = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as DeckInput | null;
+      if (local?.revision === initial.revision && Array.isArray(local.cards) && typeof local.title === 'string')
+        return local;
+    } catch {
+      /* An unavailable local cache must not prevent opening the editor. */
+    }
+    return { ...initial, cards: initial.cards.map((card) => ({ ...card })) };
+  });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState('');
+  const nav = useNavigate();
+  const client = useQueryClient();
+  const baseline = useRef(JSON.stringify({ ...initial, cards: initial.cards.map((card) => ({ ...card })) }));
+  const dirty = JSON.stringify(draft) !== baseline.current;
+  useEffect(() => {
+    const onUnload = (event: BeforeUnloadEvent) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, [dirty]);
+  useEffect(() => {
+    try {
+      if (dirty) sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {
+      /* Explicit server draft saving remains available. */
+    }
+  }, [dirty, draft, draftKey]);
+  function update(index: number, key: 'question' | 'answer', value: string) {
+    setSaved('');
+    setDraft((prev) => ({
+      ...prev,
+      cards: prev.cards.map((card, i) => (i === index ? { ...card, [key]: value } : card))
+    }));
+  }
+  async function save(isDraft: boolean) {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await flashcardsApi.save({ ...draft, isDraft }, initial.id);
+      const next = { ...result, cards: result.cards.map((card) => ({ ...card })) };
+      baseline.current = JSON.stringify(next);
+      sessionStorage.removeItem(draftKey);
+      setDraft(next);
+      client.setQueryData(deckKeys.deck(initial.id), result);
+      await client.invalidateQueries({ queryKey: deckKeys.all });
+      setSaved('Черновик сохранён');
+      if (!isDraft) nav(`/decks/${result.id}`);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const duplicates = draft.cards.map((card) => card.question.trim().toLocaleLowerCase());
+  return (
+    <Shell
+      title="Проверьте карточки"
+      onBack={() => {
+        if (busy) return;
+        if (!dirty || window.confirm('Есть несохранённые правки. Выйти без сохранения?'))
+          nav(initial.isDraft ? '/' : `/decks/${initial.id}`);
+      }}
+    >
+      <p className={styles.subtitle}>Добавляйте вопросы и ответы, чтобы учиться было удобно.</p>
+      <label className={styles.panel}>
+        Название
+        <input
+          value={draft.title}
+          maxLength={120}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+        />
+      </label>
+      {draft.sourceType !== 'manual' && (
+        <Notice>Тестовые карточки демо-режима. Исходное фото или текст не анализировались.</Notice>
+      )}
+      <div className={styles.editList}>
+        {draft.cards.map((card, index) => (
+          <section key={`${index}-${card.id}`} className={styles.panel}>
+            <div className={styles.row}>
+              <strong>Карточка {index + 1}</strong>
+              <button
+                aria-label={`Удалить карточку ${index + 1}`}
+                className={styles.deleteButton}
+                disabled={busy}
+                onClick={() => setDraft({ ...draft, cards: draft.cards.filter((_, i) => i !== index) })}
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Вопрос
+              <textarea
+                rows={2}
+                value={card.question}
+                maxLength={500}
+                disabled={busy}
+                onChange={(event) => update(index, 'question', event.target.value)}
+              />
+            </label>
+            <label>
+              Ответ
+              <textarea
+                rows={3}
+                value={card.answer}
+                maxLength={2000}
+                disabled={busy}
+                onChange={(event) => update(index, 'answer', event.target.value)}
+              />
+            </label>
+            {card.question.trim() && duplicates.indexOf(duplicates[index]) !== index && (
+              <Notice error>Такой вопрос уже есть.</Notice>
+            )}
+            {!card.answer.trim() && <small>Добавьте ответ перед сохранением набора.</small>}
+          </section>
+        ))}
+      </div>
+      <button
+        className={styles.secondary}
+        disabled={busy || draft.cards.length >= 100}
+        onClick={() => setDraft({ ...draft, cards: [...draft.cards, emptyCard()] })}
+      >
+        ＋ Добавить карточку
+      </button>
+      {error && <Notice error>{error}</Notice>}
+      {saved && <Notice>{saved}</Notice>}
+      <div className={styles.stickyActions}>
+        <button
+          className={styles.primary}
+          disabled={busy || !draft.title.trim() || !validCards(draft.cards)}
+          onClick={() => void save(false)}
+        >
+          {busy ? 'Сохраняем…' : 'Сохранить набор'}
+        </button>
+        {initial.isDraft && (
+          <button className={styles.secondary} disabled={busy || !draft.title.trim()} onClick={() => void save(true)}>
+            Сохранить черновик
+          </button>
+        )}
+      </div>
+    </Shell>
+  );
+}
+export function DeckPage() {
+  const query = useDeck();
+  const nav = useNavigate();
+  const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  async function start() {
+    if (!query.data) return;
+    setBusy(true);
+    try {
+      const session = await flashcardsApi.start(query.data.id);
+      client.setQueryData(deckKeys.session(session.id), session);
+      nav(`/sessions/${session.id}`);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    if (!query.data || !window.confirm('Удалить набор и его прогресс?')) return;
+    setBusy(true);
+    try {
+      await flashcardsApi.remove(query.data.id);
+      await client.invalidateQueries({ queryKey: deckKeys.all });
+      nav('/');
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (query.isPending)
+    return (
+      <Shell>
+        <Notice>Загружаем набор…</Notice>
+      </Shell>
+    );
+  if (query.isError)
+    return (
+      <Shell back="/">
+        <Failure error={query.error} retry={() => void query.refetch()} />
+      </Shell>
+    );
+  const deck = query.data;
+  return (
+    <Shell back="/">
+      <div className={styles.deckHeading}>
+        <Sprout />
+        <div>
+          <h1>{deck.title}</h1>
+          <p>
+            {cardCountLabel(deck.cards.length)}
+            {deck.isDraft ? ' · Черновик' : ''}
+          </p>
+        </div>
+      </div>
+      <section className={styles.panel}>
+        <Progress value={deck.knowledgePercent} />
+        <p className={styles.stat}>
+          {deck.knownCount} из {deck.cards.length} знаю!
+        </p>
+      </section>
+      <button
+        className={styles.primary}
+        disabled={busy || deck.isDraft || !deck.cards.length}
+        onClick={() => void start()}
+      >
+        ▷ Начать тренировку
+      </button>
+      <div className={styles.row}>
+        <Link className={styles.textButton} to={`/decks/${deck.id}/edit`}>
+          Редактировать
+        </Link>
+        <button className={styles.textButton} disabled={busy} onClick={() => void remove()}>
+          Удалить набор
+        </button>
+      </div>
+      {error && <Notice error>{error}</Notice>}
+      <h2>Карточки набора</h2>
+      <div className={styles.deckList}>
+        {deck.cards.slice(0, showAll ? 100 : 4).map((card) => (
+          <details key={card.id} className={styles.panel}>
+            <summary>{card.question}</summary>
+            <p>{card.answer}</p>
+            <small>
+              {card.knowledgeStatus === 'known'
+                ? 'Знаю'
+                : card.knowledgeStatus === 'unknown'
+                ? 'Пока не знаю'
+                : 'Ещё не изучали'}
+            </small>
+          </details>
+        ))}
+      </div>
+      {deck.cards.length > 4 && (
+        <button className={styles.secondary} onClick={() => setShowAll(!showAll)}>
+          {showAll ? 'Свернуть' : 'Смотреть все'}
+        </button>
+      )}
+    </Shell>
+  );
+}
+export function StudyPage() {
+  const id = Number(useParams().id);
+  const query = useQuery({ queryKey: deckKeys.session(id), queryFn: () => flashcardsApi.session(id) });
+  const client = useQueryClient();
+  const nav = useNavigate();
+  const [flipped, setFlipped] = useState(false);
+  const [dx, setDx] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [exit, setExit] = useState(false);
+  const lock = useRef(false);
+  const pointer = useRef<{ id: number; x: number; y: number; width: number } | null>(null);
+  const pending = useRef<Grade | null>(null);
+  const session = query.data;
+  const card = session?.cards.find((value) => !session.answers[String(value.id)]);
+  const answered = session ? Object.keys(session.answers).length : 0;
+  async function grade(status: 'known' | 'unknown') {
+    if (!session || !card || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    pending.current ||= { cardId: card.id, status, eventId: crypto.randomUUID() };
+    try {
+      const result = await flashcardsApi.grade(id, pending.current);
+      client.setQueryData(deckKeys.session(id), result);
+      pending.current = null;
+      setFlipped(false);
+      if (Object.keys(result.answers).length === result.cards.length) {
+        const final = await flashcardsApi.finish(id);
+        client.setQueryData(deckKeys.session(id), final);
+        await client.invalidateQueries({ queryKey: deckKeys.all });
+        nav(`/sessions/${id}/results`, { replace: true });
+      }
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setDx(0);
+      setBusy(false);
+      lock.current = false;
+    }
+  }
+  async function finish() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    try {
+      const result = await flashcardsApi.finish(id);
+      client.setQueryData(deckKeys.session(id), result);
+      await client.invalidateQueries({ queryKey: deckKeys.all });
+      nav(`/sessions/${id}/results`, { replace: true });
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  function release(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = pointer.current;
+    pointer.current = null;
+    setDx(0);
+    if (!start || start.id !== event.pointerId || busy || pending.current) return;
+    const action = gesture(event.clientX - start.x, event.clientY - start.y, start.width);
+    if (action === 'flip') setFlipped((prev) => !prev);
+    else if (action) void grade(action);
+  }
+  useEffect(() => {
+    if (session?.finishedAt) nav(`/sessions/${id}/results`, { replace: true });
+  }, [session?.finishedAt, id, nav]);
+  if (query.isPending)
+    return (
+      <Shell study>
+        <Notice>Подготавливаем тренировку…</Notice>
+      </Shell>
+    );
+  if (query.isError)
+    return (
+      <Shell back="/" study>
+        <Failure error={query.error} retry={() => void query.refetch()} />
+      </Shell>
+    );
+  return (
+    <Shell study>
+      <div className={styles.studyHeader}>
+        <button className={styles.iconButton} aria-label="Выйти из тренировки" onClick={() => setExit(true)}>
+          ×
+        </button>
+        <strong>{session?.title}</strong>
+        <span>
+          {Math.min(answered + 1, session?.cards.length || 0)} из {session?.cards.length}
+        </span>
+      </div>
+      <Progress value={session ? Math.round((answered / session.cards.length) * 100) : 0} label="Прохождение занятия" />
+      {card && (
+        <>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={`Карточка ${answered + 1}. ${flipped ? 'Ответ' : 'Вопрос'}: ${
+              flipped ? card.answer : card.question
+            }`}
+            aria-disabled={busy || !!pending.current}
+            className={`${styles.studyCard} ${dx > 0 ? styles.known : dx < 0 ? styles.unknown : ''}`}
+            style={{
+              transform: `translateX(${dx}px) rotate(${dx / 30}deg)`,
+              transition: dx === 0 ? 'transform 180ms ease-out' : 'none'
+            }}
+            onPointerDown={(event) => {
+              if (busy || pending.current || pointer.current || event.button !== 0) return;
+              pointer.current = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                width: event.currentTarget.clientWidth
+              };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const start = pointer.current;
+              if (!start || start.id !== event.pointerId) return;
+              const x = event.clientX - start.x,
+                y = event.clientY - start.y;
+              if (Math.abs(y) > Math.abs(x) && Math.abs(y) > 8) {
+                pointer.current = null;
+                setDx(0);
+                return;
+              }
+              setDx(x);
+            }}
+            onPointerUp={release}
+            onPointerCancel={() => {
+              pointer.current = null;
+              setDx(0);
+            }}
+            onLostPointerCapture={() => {
+              pointer.current = null;
+              setDx(0);
+            }}
+            onKeyDown={(event) => {
+              if (busy || pending.current) return;
+              if (['Enter', ' '].includes(event.key)) {
+                event.preventDefault();
+                setFlipped((prev) => !prev);
+              } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                void grade(event.key === 'ArrowRight' ? 'known' : 'unknown');
+              }
+            }}
+          >
+            <span className={styles.cardSide}>{flipped ? 'ОТВЕТ' : 'ВОПРОС'}</span>
+            <Sprout />
+            <h2>{flipped ? card.answer : card.question}</h2>
+            <small>Нажмите, чтобы перевернуть</small>
+          </div>
+          <div className={styles.gestureHints} aria-hidden="true">
+            <span>‹ Не знаю</span>
+            <span>Знаю ›</span>
+          </div>
+          <div className={styles.srOnly}>
+            <button disabled={busy} onClick={() => void grade('unknown')}>
+              Не знаю
+            </button>
+            <button disabled={busy} onClick={() => void grade('known')}>
+              Знаю
+            </button>
+          </div>
+        </>
+      )}
+      {busy && <Notice>Сохраняем ответ…</Notice>}
+      {error && (
+        <>
+          <Notice error>{error}</Notice>
+          {pending.current && (
+            <button className={styles.secondary} onClick={() => void grade(pending.current!.status)}>
+              Повторить сохранение ответа
+            </button>
+          )}
+        </>
+      )}
+      {!card && !session?.finishedAt && (
+        <button className={styles.primary} disabled={busy} onClick={() => void finish()}>
+          Показать результаты
+        </button>
+      )}
+      {exit && <ExitDialog busy={busy} finish={() => void finish()} close={() => setExit(false)} />}
+    </Shell>
+  );
+}
+function ExitDialog({ busy, finish, close }: { busy: boolean; finish: () => void; close: () => void }) {
+  const dialog = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    return () => previous?.focus();
+  }, []);
+  return (
+    <div className={styles.modalBackdrop}>
+      <section
+        ref={dialog}
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exit-title"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !busy) {
+            event.preventDefault();
+            close();
+          }
+          if (event.key === 'Tab') {
+            const buttons = Array.from(
+              dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || []
+            );
+            const first = buttons[0],
+              last = buttons[buttons.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }
+        }}
+      >
+        <h2 id="exit-title">Закончить тренировку?</h2>
+        <p>Сохранённые ответы останутся. Можно пройти набор снова.</p>
+        <button className={styles.primary} disabled={busy} onClick={finish}>
+          Завершить и посмотреть итог
+        </button>
+        <button className={styles.secondary} disabled={busy} onClick={close}>
+          Продолжить
+        </button>
+      </section>
+    </div>
+  );
+}
+export function ResultsPage() {
+  const id = Number(useParams().id);
+  const query = useQuery({ queryKey: deckKeys.session(id), queryFn: () => flashcardsApi.session(id) });
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function restart() {
+    if (!query.data) return;
+    setBusy(true);
+    try {
+      const session = await flashcardsApi.start(query.data.deckId);
+      nav(`/sessions/${session.id}`);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (query.isPending)
+    return (
+      <Shell>
+        <Notice>Загружаем результаты…</Notice>
+      </Shell>
+    );
+  if (query.isError)
+    return (
+      <Shell back="/">
+        <Failure error={query.error} retry={() => void query.refetch()} />
+      </Shell>
+    );
+  const session = query.data;
+  return (
+    <Shell>
+      <div className={styles.resultHeading}>
+        <h1>{session.finishedAt ? 'Тренировка завершена!' : 'Тренировка ещё идёт'}</h1>
+        <Sprout kind="cup" />
+      </div>
+      <p className={styles.subtitle}>Каждый ответ помогает понять, что повторить.</p>
+      <p>
+        Пройдено {session.knownCount + session.unknownCount} из {session.cards.length}
+      </p>
+      <section className={styles.panel}>
+        <p>Твои знания</p>
+        <strong className={styles.bigPercent}>
+          {session.knowledgePercent === null ? '—' : `${session.knowledgePercent}%`}
+        </strong>
+        <Progress value={session.knowledgePercent} />
+      </section>
+      <div className={styles.resultStats}>
+        <div>
+          <span>✓</span>
+          <strong>{session.knownCount}</strong>
+          <small>Знаю</small>
+        </div>
+        <div>
+          <span>×</span>
+          <strong>{session.unknownCount}</strong>
+          <small>Не знаю</small>
+        </div>
+      </div>
+      {error && <Notice error>{error}</Notice>}
+      <Link className={styles.primary} to={`/decks/${session.deckId}`}>
+        Вернуться к набору <span>→</span>
+      </Link>
+      {session.finishedAt ? (
+        <button className={styles.secondary} disabled={busy} onClick={() => void restart()}>
+          Пройти ещё раз ↻
+        </button>
+      ) : (
+        <Link className={styles.secondary} to={`/sessions/${id}`}>
+          Продолжить тренировку
+        </Link>
+      )}
+    </Shell>
+  );
+}

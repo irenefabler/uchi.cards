@@ -6,5 +6,5 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src", "eslint.config.js", "vite.config.ts", "scripts/init-template.js"]
+  "include": ["src", "eslint.config.js", "vite.config.ts", "scripts/init-template.js", "vitest.config.ts"]
 }

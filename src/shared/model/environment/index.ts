@@ -1,4 +1,8 @@
 export class Environment {
+  public static get demoGeneration() {
+    return import.meta.env.DEV && import.meta.env.VITE_DEMO_GENERATION === 'true';
+  }
+
   public static get basePath() {
     return this._getEnv('VITE_BASE_PATH');
   }
