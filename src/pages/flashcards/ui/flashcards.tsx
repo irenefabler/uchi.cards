@@ -969,10 +969,6 @@ export function DeckPage() {
           Поменять местами
         </button>
       </div>
-      <div className={`${styles.pairColumns} ${styles.pairLabels}`} aria-label="Направление тренировки">
-        <small>Передняя сторона</small>
-        <small>Обратная сторона</small>
-      </div>
       <div className={styles.deckList}>
         {deck.cards.map((card, index) => (
           <section
