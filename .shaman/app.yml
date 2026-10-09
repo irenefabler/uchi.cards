@@ -2,10 +2,10 @@ kind: "app"
 schema_version: "v1"
 spec:
   # заполнить по маске "{{имя-курса}}-ui"
-  name: "[TODO]"
+  name: "quizlet-ui"
   name.production: "main"
-  desc: 'UI для приложения "[TODO]" | [TODO]'
-  desc.production: '[PROD] Приложение "[TODO]" | [TODO]'
+  desc: 'UI для приложения "Quizlet" | https://gitlab.corp.mail.ru/uchiru/product/0-8/content/playground/projects/quizlet/quizlet-ui.git'
+  desc.production: '[PROD] Приложение "Quizlet" | https://gitlab.corp.mail.ru/uchiru/product/0-8/content/playground/projects/quizlet/quizlet-ui.git'
   store_logs: true
   service_mesh: true
   nat: false

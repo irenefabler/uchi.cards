@@ -11,7 +11,7 @@ variables:
   # [TODO] добавить свой base path (без кавычек) для продукта
   BUILD_ARGS: |
     BASE_IMAGE=$BASE_IMAGE_UBUNTU24_SPA
-    BASE_PATH=[TODO]
+    BASE_PATH=/quizlet
 
 include:
   - project: uchiru/ci/shared

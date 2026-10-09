@@ -6,14 +6,14 @@ spec:
     host: "uchi.ru"
     host.stage: "${{ values.STAGE_SUBDOMAIN }}.${{ values.STAGE_HOST }}"
     # URL до продукта, например /math_race
-    prefix: "[TODO]"
+    prefix: "/quizlet"
   middlewares:
     auth:
       - backend:
           service: "${{ values.targets.uchiru-auth }}"
         # название math_race берется из uchiru-login app/policies/,
         # например для math_race_policy.rb получаем math_race_authorized
-        path: "/authentication/[TODO]_authorized"
+        path: "/authentication/authorize_authorized"
         upstream_headers:
           - "Uchi-User-Type"
           - "Uchi-Account-Id"
@@ -32,7 +32,7 @@ spec:
     host: "uchi.ru"
     host.stage: "${{ values.STAGE_SUBDOMAIN }}.${{ values.STAGE_HOST }}"
     # URL до продукта, например /math_race
-    prefix: "[TODO]/assets"
+    prefix: "/quizlet/assets"
   proxy:
     backend:
       service: "${{ values.targets.self }}"

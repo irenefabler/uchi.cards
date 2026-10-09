@@ -3,22 +3,22 @@ schema_version: "v1"
 spec:
   defaults.production:
     # заполнить из app.yml => spec.name
-    env.APP_NAME: "[TODO]"
+    env.APP_NAME: "quizlet-ui"
     env.FEEDBACK_API_URL: "https://uchi.ru/content_feedback"
     services.main.mem_mb: "100"
     services.main.amount: "3"
     services.main.max_parallel: "1"
     # заполнить из app.yml => spec.name
-    targets.self: "sys-[TODO]-main-main-main"
+    targets.self: "sys-quizlet-ui-main-main-main"
     targets.uchiru-auth: "sys-uchiru-main-auth-main"
 
   defaults.stage:
     # заполнить из app.yml => spec.name
-    env.APP_NAME: "${{ values.NAMESPACE_PREFIX }}_[TODO]"
+    env.APP_NAME: "${{ values.NAMESPACE_PREFIX }}_quizlet-ui"
     env.FEEDBACK_API_URL: "https://content-cat-team.stage-uchi.ru/content_feedback"
     services.main.mem_mb: "40"
     services.main.amount: "1"
     services.main.max_parallel: "1"
     # заполнить из app.yml => spec.name
-    targets.self: "sys-${{ values.NAMESPACE_PREFIX }}-[TODO]-main-main"
+    targets.self: "sys-${{ values.NAMESPACE_PREFIX }}-quizlet-ui-main-main"
     targets.uchiru-auth: "sys-${{ values.NAMESPACE_PREFIX }}-uchiru-login-main-main"

@@ -1,4 +1,4 @@
-# [Название проекта]
+# Quizlet
 
 > Основано на [FSD шаблоне](https://gitlab.corp.mail.ru/uchiru/product/content-1-4/templates/frontend-fsd-template).
 
@@ -14,13 +14,13 @@
 
 Перед использованием обязательно:
 
-- [ ] Задать `VITE_BASE_PATH` и `VITE_PROXY_URL` в `.env` \*
-- [ ] Задать `name`, `desc`, `targets`, `path` и `prefix` в `.shaman/*.yml` \*
-- [ ] Задать `BASE_PATH` в `.gitlab-ci.yml` \*
-- [ ] Настроить alias'ы в `tsconfig.json`, `tsconfig.eslint.json`, `tsconfig.node.json`  и `vite.config.ts`, если требуется. По умолчанию `src`.
-- [ ] Указать пути для proxy в `.env.development`**, если используете API
-- [ ] Указать свою команду `.gitlab/CODEOWNERS`
-- [ ] Заполнить README
+- [x] Задать `VITE_BASE_PATH` и `VITE_PROXY_URL` в `.env` \*
+- [x] Задать `name`, `desc`, `targets`, `path` и `prefix` в `.shaman/*.yml` \*
+- [x] Задать `BASE_PATH` в `.gitlab-ci.yml` \*
+- [x] Настроить alias'ы в `tsconfig.json`, `tsconfig.eslint.json`, `tsconfig.node.json`  и `vite.config.ts`, если требуется. По умолчанию `src`.
+- [x] Указать пути для proxy в `.env.development`**, если используете API
+- [x] Указать свою команду `.gitlab/CODEOWNERS`
+- [x] Заполнить README
 
 \* Для удобства используй поиск по проекту [TODO]
 
